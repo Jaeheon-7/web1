@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-const PAGES = ['/', '/1.html', '/2.html', '/3.html'];
+const PAGES = ['/index.html', '/1.html', '/2.html', '/3.html'];
 
 // Shared structure present on every page
 test.describe('Common structure', () => {
@@ -62,7 +62,7 @@ test.describe('Common structure', () => {
 // Page-specific heading content
 test.describe('Page headings', () => {
   test('index.html — h2 is about Harry Potter', async ({ page }) => {
-    await page.goto('/');
+    await page.goto('/index.html');
     await expect(page.locator('h2')).toContainText('Harry Potter');
   });
 

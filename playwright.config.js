@@ -9,7 +9,16 @@ module.exports = defineConfig({
     trace: 'on-first-retry',
   },
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome',
+          args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        },
+      },
+    },
   ],
   webServer: {
     command: 'npx serve . --listen 3000 --no-clipboard',
