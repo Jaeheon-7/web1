@@ -1,0 +1,13 @@
+{
+  "name": "web1",
+  "version": "1.0.0",
+  "description": "WEB1 static site",
+  "scripts": {
+    "test": "playwright test",
+    "test:report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "serve": "^14.2.0"
+  }
+}
