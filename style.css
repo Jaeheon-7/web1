@@ -1,0 +1,133 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background-color: #f4f6f8;
+  color: #333;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* 사이드바 */
+#sidebar {
+  width: 220px;
+  background-color: #1e2a3a;
+  color: #fff;
+  padding: 30px 20px;
+  flex-shrink: 0;
+}
+
+#sidebar h1 {
+  font-size: 2rem;
+  margin-bottom: 30px;
+  border-bottom: 2px solid #4a90d9;
+  padding-bottom: 12px;
+}
+
+#sidebar h1 a {
+  color: #fff;
+  text-decoration: none;
+}
+
+#sidebar h1 a:hover {
+  color: #4a90d9;
+}
+
+#sidebar ol {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 30px;
+}
+
+#sidebar ol li {
+  margin-bottom: 8px;
+}
+
+#sidebar ol li a {
+  color: #b0c4de;
+  text-decoration: none;
+  font-size: 1rem;
+  padding: 6px 10px;
+  display: block;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+#sidebar ol li a:hover {
+  background-color: #4a90d9;
+  color: #fff;
+}
+
+#sidebar ul {
+  list-style: none;
+  padding: 0;
+  border-top: 1px solid #2e3f55;
+  padding-top: 20px;
+}
+
+#sidebar ul li {
+  font-size: 0.85rem;
+  color: #7a90a8;
+  padding: 3px 10px;
+}
+
+/* 메인 콘텐츠 */
+#content {
+  flex: 1;
+  padding: 50px 60px;
+  max-width: 860px;
+}
+
+#content h2 {
+  font-size: 1.8rem;
+  color: #1e2a3a;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 3px solid #4a90d9;
+}
+
+#content p {
+  line-height: 1.8;
+  margin-bottom: 20px;
+  color: #555;
+}
+
+#content img {
+  display: block;
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 24px 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+strong {
+  color: #1e2a3a;
+}
+
+a {
+  color: #4a90d9;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* 반응형 */
+@media (max-width: 640px) {
+  body {
+    flex-direction: column;
+  }
+
+  #sidebar {
+    width: 100%;
+    padding: 20px;
+  }
+
+  #content {
+    padding: 30px 20px;
+  }
+}
