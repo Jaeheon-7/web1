@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>자금수지 전망/실적 비교</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Malgun Gothic', Arial, sans-serif; font-size: 13px; background: #f0f2f5; color: #222; }
+
+    header {
+      background: #1a3a5c;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { font-size: 18px; font-weight: 700; }
+    .header-sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+
+    .toolbar {
+      background: white;
+      border-bottom: 1px solid #dde;
+      padding: 10px 24px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .toolbar label { font-size: 12px; color: #555; }
+    .toolbar select, .toolbar input[type=number] {
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      padding: 5px 8px;
+      font-size: 13px;
+    }
+    .toolbar input[type=number] { width: 70px; }
+
+    .btn {
+      padding: 6px 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn-primary { background: #1a3a5c; color: white; }
+    .btn-primary:hover { background: #254d78; }
+    .btn-success { background: #217a3c; color: white; }
+    .btn-success:hover { background: #2a9450; }
+    .btn-secondary { background: #6c757d; color: white; }
+    .btn-secondary:hover { background: #5a6268; }
+    .btn-danger { background: #c0392b; color: white; }
+    .btn-danger:hover { background: #a93226; }
+
+    .main { padding: 20px 24px; }
+
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+    .tab {
+      padding: 8px 18px;
+      border: 1px solid #ccd;
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+      cursor: pointer;
+      background: #e8eaf0;
+      font-size: 13px;
+      color: #555;
+    }
+    .tab.active { background: white; color: #1a3a5c; font-weight: 700; border-color: #1a3a5c; }
+
+    .panel { display: none; background: white; border: 1px solid #ccd; border-radius: 0 6px 6px 6px; padding: 20px; }
+    .panel.active { display: block; }
+
+    /* ── 입력 테이블 ── */
+    .input-section h3 { font-size: 14px; color: #1a3a5c; margin-bottom: 10px; }
+    .input-table-wrap { overflow-x: auto; }
+    table.input-tbl {
+      border-collapse: collapse;
+      min-width: 700px;
+      width: 100%;
+    }
+    table.input-tbl th, table.input-tbl td {
+      border: 1px solid #d0d4de;
+      padding: 6px 8px;
+      text-align: right;
+      white-space: nowrap;
+    }
+    table.input-tbl th { background: #1a3a5c; color: white; text-align: center; font-size: 12px; }
+    table.input-tbl td:first-child { text-align: left; font-weight: 600; background: #f5f7fa; }
+    table.input-tbl td.category-header { background: #e8eaf0; font-weight: 700; color: #1a3a5c; font-size: 12px; }
+    table.input-tbl input[type=number] {
+      width: 90px;
+      border: 1px solid #bbb;
+      border-radius: 3px;
+      padding: 3px 6px;
+      text-align: right;
+      font-size: 12px;
+    }
+    table.input-tbl input[type=number]:focus { outline: 2px solid #1a3a5c; border-color: transparent; }
+
+    /* ── 비교 테이블 ── */
+    table.compare-tbl {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 700px;
+    }
+    table.compare-tbl th, table.compare-tbl td {
+      border: 1px solid #d0d4de;
+      padding: 7px 10px;
+      text-align: right;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    table.compare-tbl th { background: #1a3a5c; color: white; text-align: center; }
+    table.compare-tbl td:first-child { text-align: left; font-weight: 600; min-width: 140px; }
+    table.compare-tbl tr.cat-row td { background: #e8eaf0; font-weight: 700; color: #1a3a5c; }
+    table.compare-tbl tr.total-row td { background: #1a3a5c; color: white; font-weight: 700; }
+    table.compare-tbl tr.net-row td { background: #2c5f8a; color: white; font-weight: 700; font-size: 13px; }
+    .positive { color: #217a3c; font-weight: 700; }
+    .negative { color: #c0392b; font-weight: 700; }
+    .zero { color: #888; }
+    .pct { font-size: 11px; color: #666; }
+
+    .summary-cards {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .card {
+      flex: 1;
+      min-width: 160px;
+      background: white;
+      border: 1px solid #dde;
+      border-radius: 8px;
+      padding: 14px 18px;
+      border-top: 4px solid #1a3a5c;
+    }
+    .card.income { border-top-color: #217a3c; }
+    .card.expense { border-top-color: #c0392b; }
+    .card.net { border-top-color: #e67e22; }
+    .card-label { font-size: 11px; color: #777; margin-bottom: 4px; }
+    .card-val { font-size: 20px; font-weight: 700; color: #1a3a5c; }
+    .card-diff { font-size: 12px; margin-top: 4px; }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1a3a5c;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid #1a3a5c;
+    }
+
+    .vba-box {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 6px;
+      padding: 18px;
+      font-family: 'Consolas', monospace;
+      font-size: 12px;
+      line-height: 1.6;
+      overflow-x: auto;
+      white-space: pre;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+    .vba-keyword { color: #569cd6; }
+    .vba-string { color: #ce9178; }
+    .vba-comment { color: #6a9955; }
+    .vba-function { color: #dcdcaa; }
+
+    .copy-btn-wrap { text-align: right; margin-bottom: 8px; }
+    .guide-steps { list-style: none; counter-reset: step; }
+    .guide-steps li {
+      counter-increment: step;
+      padding: 8px 0 8px 36px;
+      position: relative;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+    .guide-steps li::before {
+      content: counter(step);
+      position: absolute;
+      left: 0;
+      top: 8px;
+      background: #1a3a5c;
+      color: white;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .guide-steps code {
+      background: #f0f0f0;
+      border-radius: 3px;
+      padding: 1px 5px;
+      font-family: monospace;
+      font-size: 12px;
+      color: #c0392b;
+    }
+
+    @media print {
+      header, .toolbar, .tab-bar, .btn { display: none !important; }
+      .panel { display: block !important; border: none; padding: 0; }
+      body { background: white; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-sub">자금수지 관리 도구</div>
+    <h1>월별 전망 / 실적 비교표</h1>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <span style="font-size:12px;opacity:0.8;" id="headerMonth"></span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <label>연도</label>
+  <input type="number" id="selYear" min="2020" max="2035" value="2026">
+  <label>월</label>
+  <select id="selMonth">
+    <option value="1">1월</option><option value="2">2월</option>
+    <option value="3">3월</option><option value="4">4월</option>
+    <option value="5">5월</option><option value="6">6월</option>
+    <option value="7">7월</option><option value="8">8월</option>
+    <option value="9">9월</option><option value="10">10월</option>
+    <option value="11">11월</option><option value="12">12월</option>
+  </select>
+  <label>단위</label>
+  <select id="selUnit">
+    <option value="1">원</option>
+    <option value="1000" selected>천원</option>
+    <option value="1000000">백만원</option>
+  </select>
+  <button class="btn btn-primary" onclick="renderCompare()">비교 계산</button>
+  <button class="btn btn-success" onclick="saveData()">저장</button>
+  <button class="btn btn-secondary" onclick="loadData()">불러오기</button>
+  <button class="btn btn-danger" onclick="clearAll()">초기화</button>
+  <button class="btn btn-secondary" onclick="window.print()">인쇄</button>
+</div>
+
+<div class="main">
+  <div class="tab-bar">
+    <div class="tab active" onclick="switchTab('tab-forecast')">전망 입력</div>
+    <div class="tab" onclick="switchTab('tab-actual')">실적 입력</div>
+    <div class="tab" onclick="switchTab('tab-compare')">전망/실적 비교</div>
+    <div class="tab" onclick="switchTab('tab-vba')">Excel VBA 코드</div>
+  </div>
+
+  <!-- 전망 입력 -->
+  <div id="tab-forecast" class="panel active">
+    <div class="input-section">
+      <h3>전망 데이터 입력 <span style="font-size:11px;color:#888;font-weight:400;">(금액 단위: <span id="unitLabel1">천원</span>)</span></h3>
+      <div class="input-table-wrap">
+        <table class="input-tbl" id="forecastTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 실적 입력 -->
+  <div id="tab-actual" class="panel">
+    <div class="input-section">
+      <h3>실적 데이터 입력 <span style="font-size:11px;color:#888;font-weight:400;">(금액 단위: <span id="unitLabel2">천원</span>)</span></h3>
+      <div class="input-table-wrap">
+        <table class="input-tbl" id="actualTable"></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 비교 -->
+  <div id="tab-compare" class="panel">
+    <div id="summaryCards" class="summary-cards"></div>
+    <div class="section-title" id="compareTitle">전망 / 실적 비교</div>
+    <div style="overflow-x:auto;">
+      <table class="compare-tbl" id="compareTable"></table>
+    </div>
+  </div>
+
+  <!-- VBA -->
+  <div id="tab-vba" class="panel">
+    <div class="section-title">Excel VBA 자동화 코드</div>
+    <p style="margin-bottom:16px;color:#555;font-size:13px;">
+      아래 코드를 Excel에서 <strong>Alt+F11</strong> → VBA 편집기 → 모듈 삽입 후 붙여넣기 하세요.
+      자세한 적용 방법은 아래 가이드를 참고하세요.
+    </p>
+
+    <div class="copy-btn-wrap">
+      <button class="btn btn-primary" onclick="copyVBA()">VBA 코드 복사</button>
+    </div>
+    <div class="vba-box" id="vbaCode"></div>
+
+    <div style="margin-top:28px;">
+      <div class="section-title">Excel 적용 가이드</div>
+      <ol class="guide-steps">
+        <li>Excel 파일 확장자를 <code>.xlsx</code> → <code>.xlsm</code>(매크로 포함 형식)으로 저장하세요.</li>
+        <li><code>Alt + F11</code>을 눌러 VBA 편집기를 엽니다.</li>
+        <li>메뉴에서 <code>삽입 → 모듈</code>을 클릭합니다.</li>
+        <li>위 VBA 코드를 전체 복사하여 모듈창에 붙여넣습니다.</li>
+        <li>Excel 파일에 <code>전망</code>, <code>실적</code>, <code>비교표</code> 시트 세 개를 만드세요.</li>
+        <li><code>전망</code>과 <code>실적</code> 시트의 A열에 항목명, B열부터 월별 금액을 입력합니다.</li>
+        <li>Excel 리본 메뉴에서 <code>보기 → 매크로 → 매크로 보기</code>로 <code>자금수지비교표생성</code>을 실행하세요.</li>
+        <li>편의를 위해 도형/버튼에 매크로를 연결해두면 클릭 한 번으로 실행됩니다.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 항목 정의 ──
+const CATEGORIES = [
+  {
+    name: "수입",
+    items: ["영업수입", "임대수입", "이자수입", "기타수입"]
+  },
+  {
+    name: "지출",
+    items: ["인건비", "복리후생비", "임차료", "소모품비", "광고홍보비", "접대비", "차량유지비", "통신비", "공과금", "기타운영비", "차입금상환"]
+  }
+];
+
+// 전망/실적 데이터 저장소
+let forecastData = {};
+let actualData = {};
+
+function getKey(cat, item) { return cat + '|' + item; }
+
+function getVal(store, cat, item) {
+  return store[getKey(cat, item)] || 0;
+}
+
+function setVal(store, cat, item, val) {
+  store[getKey(cat, item)] = Number(val) || 0;
+}
+
+// ── 입력 테이블 렌더 ──
+function renderInputTable(tableId, store) {
+  const tbl = document.getElementById(tableId);
+  const unit = document.getElementById('selUnit').value;
+  const unitText = {1:'원', 1000:'천원', 1000000:'백만원'}[unit];
+  document.getElementById('unitLabel1').textContent = unitText;
+  document.getElementById('unitLabel2').textContent = unitText;
+
+  let html = `<thead><tr>
+    <th style="width:140px;">항목</th>
+    <th>금액 (${unitText})</th>
+  </tr></thead><tbody>`;
+
+  CATEGORIES.forEach(cat => {
+    html += `<tr><td colspan="2" class="category-header">▶ ${cat.name}</td></tr>`;
+    cat.items.forEach(item => {
+      const v = getVal(store, cat.name, item);
+      html += `<tr>
+        <td>　${item}</td>
+        <td><input type="number" value="${v || ''}" placeholder="0"
+          onchange="setVal(${store === forecastData ? 'forecastData' : 'actualData'}, '${cat.name}', '${item}', this.value)"></td>
+      </tr>`;
+    });
+  });
+  html += '</tbody>';
+  tbl.innerHTML = html;
+}
+
+// ── 비교 렌더 ──
+function renderCompare() {
+  const year = document.getElementById('selYear').value;
+  const month = document.getElementById('selMonth').value;
+  const unit = Number(document.getElementById('selUnit').value);
+  const unitText = {1:'원', 1000:'천원', 1000000:'백만원'}[unit];
+
+  document.getElementById('compareTitle').textContent =
+    `${year}년 ${month}월 전망 / 실적 비교표`;
+  document.getElementById('headerMonth').textContent = `${year}년 ${month}월`;
+
+  // 합계 계산
+  let totalForecastIncome = 0, totalActualIncome = 0;
+  let totalForecastExpense = 0, totalActualExpense = 0;
+
+  const catRows = CATEGORIES.map(cat => {
+    let catForecast = 0, catActual = 0;
+    const itemRows = cat.items.map(item => {
+      const f = getVal(forecastData, cat.name, item);
+      const a = getVal(actualData, cat.name, item);
+      const diff = a - f;
+      catForecast += f;
+      catActual += a;
+      return { item, f, a, diff };
+    });
+    if (cat.name === '수입') {
+      totalForecastIncome += catForecast;
+      totalActualIncome += catActual;
+    } else {
+      totalForecastExpense += catForecast;
+      totalActualExpense += catActual;
+    }
+    return { cat, catForecast, catActual, itemRows };
+  });
+
+  const netForecast = totalForecastIncome - totalForecastExpense;
+  const netActual = totalActualIncome - totalActualExpense;
+  const netDiff = netActual - netForecast;
+
+  // 요약 카드
+  const cards = document.getElementById('summaryCards');
+  cards.innerHTML = `
+    <div class="card income">
+      <div class="card-label">수입 전망</div>
+      <div class="card-val">${fmt(totalForecastIncome)}</div>
+      <div class="card-diff">실적 ${fmt(totalActualIncome)} &nbsp;
+        <span class="${diffCls(totalActualIncome - totalForecastIncome)}">${diffSign(totalActualIncome - totalForecastIncome)}${fmt(Math.abs(totalActualIncome - totalForecastIncome))}</span>
+      </div>
+    </div>
+    <div class="card expense">
+      <div class="card-label">지출 전망</div>
+      <div class="card-val">${fmt(totalForecastExpense)}</div>
+      <div class="card-diff">실적 ${fmt(totalActualExpense)} &nbsp;
+        <span class="${expDiffCls(totalActualExpense - totalForecastExpense)}">${diffSign(totalActualExpense - totalForecastExpense)}${fmt(Math.abs(totalActualExpense - totalForecastExpense))}</span>
+      </div>
+    </div>
+    <div class="card net">
+      <div class="card-label">순수지 전망 (수입-지출)</div>
+      <div class="card-val">${fmt(netForecast)}</div>
+      <div class="card-diff">실적 ${fmt(netActual)} &nbsp;
+        <span class="${diffCls(netDiff)}">${diffSign(netDiff)}${fmt(Math.abs(netDiff))}</span>
+      </div>
+    </div>
+  `;
+
+  // 비교 테이블
+  const tbl = document.getElementById('compareTable');
+  let html = `<thead><tr>
+    <th>항목</th>
+    <th>전망 (${unitText})</th>
+    <th>실적 (${unitText})</th>
+    <th>차이 (실적-전망)</th>
+    <th>달성율</th>
+  </tr></thead><tbody>`;
+
+  catRows.forEach(({ cat, catForecast, catActual, itemRows }) => {
+    const catDiff = catActual - catForecast;
+    const catPct = catForecast !== 0 ? (catActual / catForecast * 100).toFixed(1) : '-';
+    html += `<tr class="cat-row">
+      <td>▶ ${cat.name} 합계</td>
+      <td>${fmt(catForecast)}</td>
+      <td>${fmt(catActual)}</td>
+      <td class="${cat.name==='수입' ? diffCls(catDiff) : expDiffCls(catDiff)}">${diffSign(catDiff)}${fmt(Math.abs(catDiff))}</td>
+      <td class="pct">${catPct !== '-' ? catPct + '%' : '-'}</td>
+    </tr>`;
+
+    itemRows.forEach(({ item, f, a, diff }) => {
+      const pct = f !== 0 ? (a / f * 100).toFixed(1) + '%' : '-';
+      const cls = cat.name === '수입' ? diffCls(diff) : expDiffCls(diff);
+      html += `<tr>
+        <td>　${item}</td>
+        <td>${fmt(f)}</td>
+        <td>${fmt(a)}</td>
+        <td class="${cls}">${diffSign(diff)}${fmt(Math.abs(diff))}</td>
+        <td class="pct">${pct}</td>
+      </tr>`;
+    });
+  });
+
+  // 총계 행
+  html += `<tr class="total-row">
+    <td>수입 합계</td>
+    <td>${fmt(totalForecastIncome)}</td>
+    <td>${fmt(totalActualIncome)}</td>
+    <td class="${diffCls(totalActualIncome - totalForecastIncome)}">${diffSign(totalActualIncome - totalForecastIncome)}${fmt(Math.abs(totalActualIncome - totalForecastIncome))}</td>
+    <td>${totalForecastIncome !== 0 ? (totalActualIncome/totalForecastIncome*100).toFixed(1)+'%' : '-'}</td>
+  </tr>
+  <tr class="total-row">
+    <td>지출 합계</td>
+    <td>${fmt(totalForecastExpense)}</td>
+    <td>${fmt(totalActualExpense)}</td>
+    <td class="${expDiffCls(totalActualExpense - totalForecastExpense)}">${diffSign(totalActualExpense - totalForecastExpense)}${fmt(Math.abs(totalActualExpense - totalForecastExpense))}</td>
+    <td>${totalForecastExpense !== 0 ? (totalActualExpense/totalForecastExpense*100).toFixed(1)+'%' : '-'}</td>
+  </tr>
+  <tr class="net-row">
+    <td>순수지 (수입 - 지출)</td>
+    <td>${fmt(netForecast)}</td>
+    <td>${fmt(netActual)}</td>
+    <td class="${diffCls(netDiff)}">${diffSign(netDiff)}${fmt(Math.abs(netDiff))}</td>
+    <td>${netForecast !== 0 ? (netActual/netForecast*100).toFixed(1)+'%' : '-'}</td>
+  </tr>`;
+
+  html += '</tbody>';
+  tbl.innerHTML = html;
+  switchTab('tab-compare');
+}
+
+function fmt(n) {
+  if (n === 0 || n === undefined) return '-';
+  return Math.round(n).toLocaleString('ko-KR');
+}
+function diffCls(d) { return d > 0 ? 'positive' : d < 0 ? 'negative' : 'zero'; }
+function expDiffCls(d) { return d < 0 ? 'positive' : d > 0 ? 'negative' : 'zero'; } // 지출은 반대
+function diffSign(d) { return d > 0 ? '▲ ' : d < 0 ? '▼ ' : ''; }
+
+// ── 저장/불러오기 ──
+function saveData() {
+  const year = document.getElementById('selYear').value;
+  const month = document.getElementById('selMonth').value;
+  const key = `cashflow_${year}_${month}`;
+  localStorage.setItem(key, JSON.stringify({ forecastData, actualData }));
+  alert(`${year}년 ${month}월 데이터가 저장되었습니다.`);
+}
+
+function loadData() {
+  const year = document.getElementById('selYear').value;
+  const month = document.getElementById('selMonth').value;
+  const key = `cashflow_${year}_${month}`;
+  const saved = localStorage.getItem(key);
+  if (!saved) { alert('저장된 데이터가 없습니다.'); return; }
+  const d = JSON.parse(saved);
+  forecastData = d.forecastData || {};
+  actualData = d.actualData || {};
+  renderInputTable('forecastTable', forecastData);
+  renderInputTable('actualTable', actualData);
+  alert(`${year}년 ${month}월 데이터를 불러왔습니다.`);
+}
+
+function clearAll() {
+  if (!confirm('입력한 데이터를 모두 초기화할까요?')) return;
+  forecastData = {};
+  actualData = {};
+  renderInputTable('forecastTable', forecastData);
+  renderInputTable('actualTable', actualData);
+}
+
+// ── 탭 전환 ──
+function switchTab(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx = ['tab-forecast','tab-actual','tab-compare','tab-vba'].indexOf(id);
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+  if (id === 'tab-forecast') renderInputTable('forecastTable', forecastData);
+  if (id === 'tab-actual') renderInputTable('actualTable', actualData);
+}
+
+// ── VBA 코드 ──
+function renderVBA() {
+  const items = CATEGORIES.flatMap(c => c.items.map(i => `"${i}"`)).join(', ');
+  const code = `' ============================================================
+' 자금수지 전망/실적 비교표 자동 생성 매크로
+' 사용법: 아래 Main 프로시저 실행 (Alt+F8 또는 버튼 연결)
+' ============================================================
+
+Option Explicit
+
+' ── 항목 상수 ──
+Const DATA_START_ROW As Integer = 2   ' 데이터 시작 행 (1행은 헤더)
+Const LABEL_COL     As Integer = 1   ' 항목명 열 (A)
+Const VALUE_COL     As Integer = 2   ' 금액 열   (B)
+
+Sub 자금수지비교표생성()
+    Dim wsFore  As Worksheet   ' 전망 시트
+    Dim wsActual As Worksheet  ' 실적 시트
+    Dim wsComp  As Worksheet   ' 비교표 시트
+    Dim year    As Integer
+    Dim month   As Integer
+
+    ' 연도·월 입력
+    year  = CInt(InputBox("연도를 입력하세요 (예: 2026)", "연도", Year(Date)))
+    If year = 0 Then Exit Sub
+    month = CInt(InputBox("월을 입력하세요 (1~12)", "월", Month(Date)))
+    If month = 0 Then Exit Sub
+
+    ' 시트 확인
+    On Error Resume Next
+    Set wsFore   = ThisWorkbook.Sheets("전망")
+    Set wsActual = ThisWorkbook.Sheets("실적")
+    Set wsComp   = ThisWorkbook.Sheets("비교표")
+    On Error GoTo 0
+
+    If wsFore Is Nothing Then
+        MsgBox "'전망' 시트가 없습니다. 시트를 만들어주세요.", vbExclamation: Exit Sub
+    End If
+    If wsActual Is Nothing Then
+        MsgBox "'실적' 시트가 없습니다. 시트를 만들어주세요.", vbExclamation: Exit Sub
+    End If
+    If wsComp Is Nothing Then
+        Set wsComp = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+        wsComp.Name = "비교표"
+    End If
+
+    Call BuildCompare(wsFore, wsActual, wsComp, year, month)
+    wsComp.Activate
+    MsgBox year & "년 " & month & "월 비교표가 생성되었습니다!", vbInformation
+End Sub
+
+Sub BuildCompare(wsFore As Worksheet, wsActual As Worksheet, _
+                 wsComp As Worksheet, year As Integer, month As Integer)
+    Dim categories(1) As String
+    Dim incomeItems(3)  As String
+    Dim expenseItems(10) As String
+
+    categories(0) = "수입"
+    categories(1) = "지출"
+    incomeItems(0)  = "영업수입" : incomeItems(1)  = "임대수입"
+    incomeItems(2)  = "이자수입" : incomeItems(3)  = "기타수입"
+    expenseItems(0)  = "인건비"   : expenseItems(1)  = "복리후생비"
+    expenseItems(2)  = "임차료"   : expenseItems(3)  = "소모품비"
+    expenseItems(4)  = "광고홍보비": expenseItems(5)  = "접대비"
+    expenseItems(6)  = "차량유지비": expenseItems(7)  = "통신비"
+    expenseItems(8)  = "공과금"   : expenseItems(9)  = "기타운영비"
+    expenseItems(10) = "차입금상환"
+
+    ' 비교표 초기화
+    wsComp.Cells.Clear
+
+    Dim r As Integer : r = 1
+
+    ' ── 제목 ──
+    With wsComp.Cells(r, 1)
+        .Value = year & "년 " & month & "월 자금수지 전망/실적 비교표"
+        .Font.Bold = True : .Font.Size = 14
+    End With
+    r = r + 2
+
+    ' ── 헤더 ──
+    wsComp.Cells(r, 1).Value = "항목"
+    wsComp.Cells(r, 2).Value = "전망 (천원)"
+    wsComp.Cells(r, 3).Value = "실적 (천원)"
+    wsComp.Cells(r, 4).Value = "차이 (실적-전망)"
+    wsComp.Cells(r, 5).Value = "달성율"
+    StyleHeader wsComp, r
+    r = r + 1
+
+    Dim totalForecastIncome As Double, totalActualIncome As Double
+    Dim totalForecastExpense As Double, totalActualExpense As Double
+    totalForecastIncome = 0 : totalActualIncome = 0
+    totalForecastExpense = 0 : totalActualExpense = 0
+
+    ' ── 수입 ──
+    Dim catStartRow As Integer
+    catStartRow = r
+    Dim i As Integer
+    For i = 0 To 3
+        Dim fVal As Double, aVal As Double
+        fVal = GetItemValue(wsFore, incomeItems(i))
+        aVal = GetItemValue(wsActual, incomeItems(i))
+        WriteRow wsComp, r, "  " & incomeItems(i), fVal, aVal, True
+        totalForecastIncome = totalForecastIncome + fVal
+        totalActualIncome   = totalActualIncome + aVal
+        r = r + 1
+    Next i
+    WriteCatTotal wsComp, r, "수입 합계", totalForecastIncome, totalActualIncome, True
+    r = r + 1
+
+    ' ── 지출 ──
+    For i = 0 To 10
+        fVal = GetItemValue(wsFore, expenseItems(i))
+        aVal = GetItemValue(wsActual, expenseItems(i))
+        WriteRow wsComp, r, "  " & expenseItems(i), fVal, aVal, False
+        totalForecastExpense = totalForecastExpense + fVal
+        totalActualExpense   = totalActualExpense + aVal
+        r = r + 1
+    Next i
+    WriteCatTotal wsComp, r, "지출 합계", totalForecastExpense, totalActualExpense, False
+    r = r + 1
+
+    ' ── 순수지 ──
+    Dim netFore As Double : netFore = totalForecastIncome - totalForecastExpense
+    Dim netAct  As Double : netAct  = totalActualIncome - totalActualExpense
+    WriteNetRow wsComp, r, netFore, netAct
+    r = r + 1
+
+    ' 열 너비 자동 조정
+    wsComp.Columns("A:E").AutoFit
+    wsComp.Columns("A").ColumnWidth = 18
+End Sub
+
+Function GetItemValue(ws As Worksheet, itemName As String) As Double
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, LABEL_COL).End(xlUp).Row
+    Dim j As Long
+    For j = DATA_START_ROW To lastRow
+        If Trim(ws.Cells(j, LABEL_COL).Value) = itemName Then
+            GetItemValue = CDbl(ws.Cells(j, VALUE_COL).Value)
+            Exit Function
+        End If
+    Next j
+    GetItemValue = 0
+End Function
+
+Sub WriteRow(ws As Worksheet, r As Integer, label As String, _
+             fore As Double, act As Double, isIncome As Boolean)
+    ws.Cells(r, 1).Value = label
+    ws.Cells(r, 2).Value = fore
+    ws.Cells(r, 3).Value = act
+    Dim diff As Double : diff = act - fore
+    ws.Cells(r, 4).Value = diff
+    If fore <> 0 Then
+        ws.Cells(r, 5).Value = act / fore
+        ws.Cells(r, 5).NumberFormat = "0.0%"
+    End If
+    ws.Cells(r, 2).NumberFormat = "#,##0"
+    ws.Cells(r, 3).NumberFormat = "#,##0"
+    ws.Cells(r, 4).NumberFormat = "#,##0"
+    ' 색상: 수입은 양수=초록, 지출은 음수=초록
+    If isIncome Then
+        ws.Cells(r, 4).Font.Color = IIf(diff >= 0, RGB(33,122,60), RGB(192,57,43))
+    Else
+        ws.Cells(r, 4).Font.Color = IIf(diff <= 0, RGB(33,122,60), RGB(192,57,43))
+    End If
+End Sub
+
+Sub WriteCatTotal(ws As Worksheet, r As Integer, label As String, _
+                  fore As Double, act As Double, isIncome As Boolean)
+    WriteRow ws, r, label, fore, act, isIncome
+    With ws.Range(ws.Cells(r, 1), ws.Cells(r, 5))
+        .Font.Bold = True
+        .Interior.Color = RGB(220, 230, 242)
+    End With
+End Sub
+
+Sub WriteNetRow(ws As Worksheet, r As Integer, fore As Double, act As Double)
+    ws.Cells(r, 1).Value = "순수지 (수입 - 지출)"
+    ws.Cells(r, 2).Value = fore
+    ws.Cells(r, 3).Value = act
+    ws.Cells(r, 4).Value = act - fore
+    If fore <> 0 Then
+        ws.Cells(r, 5).Value = act / fore
+        ws.Cells(r, 5).NumberFormat = "0.0%"
+    End If
+    ws.Cells(r, 2).NumberFormat = "#,##0"
+    ws.Cells(r, 3).NumberFormat = "#,##0"
+    ws.Cells(r, 4).NumberFormat = "#,##0"
+    With ws.Range(ws.Cells(r, 1), ws.Cells(r, 5))
+        .Font.Bold = True : .Font.Color = RGB(255,255,255)
+        .Interior.Color = RGB(26, 58, 92)
+    End With
+End Sub
+
+Sub StyleHeader(ws As Worksheet, r As Integer)
+    With ws.Range(ws.Cells(r, 1), ws.Cells(r, 5))
+        .Font.Bold = True : .Font.Color = RGB(255,255,255)
+        .Interior.Color = RGB(26, 58, 92)
+        .HorizontalAlignment = xlCenter
+    End With
+End Sub`;
+
+  document.getElementById('vbaCode').textContent = code;
+}
+
+function copyVBA() {
+  const text = document.getElementById('vbaCode').textContent;
+  navigator.clipboard.writeText(text).then(() => alert('VBA 코드가 클립보드에 복사되었습니다.'));
+}
+
+// ── 초기화 ──
+(function init() {
+  const now = new Date();
+  document.getElementById('selYear').value = now.getFullYear();
+  document.getElementById('selMonth').value = now.getMonth() + 1;
+  document.getElementById('headerMonth').textContent =
+    `${now.getFullYear()}년 ${now.getMonth()+1}월`;
+  renderInputTable('forecastTable', forecastData);
+  renderInputTable('actualTable', actualData);
+  renderVBA();
+})();
+</script>
+</body>
+</html>
