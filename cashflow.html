@@ -73,6 +73,28 @@
   .balance-line.big{background:#243b53;color:#fff;font-size:16px}
   svg{width:100%;height:auto;display:block}
   .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  /* ---- 갑지(보고서) ---- */
+  .g-title{text-align:center;margin:2px 0 2px}
+  .g-title h3{margin:0;font-size:18px;font-weight:800;letter-spacing:1px}
+  .g-title .d{color:var(--muted);font-size:12.5px}
+  .g-unit{text-align:right;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+  table.gapji{border:1px solid #b8c2d0;font-size:12.5px}
+  table.gapji th,table.gapji td{border:1px solid #cfd8e3;padding:5px 8px}
+  table.gapji thead th{background:#eef3ea;color:#33445a;text-align:center;font-weight:700}
+  table.gapji td.lft,table.gapji th.lft{text-align:left}
+  table.gapji tr.grp td{background:#f1f5fb;font-weight:800;text-align:left;color:#243b53}
+  table.gapji tr.row-tot td{background:#eaf0e6;font-weight:800}
+  table.gapji td.memo{white-space:normal;color:#33445a;text-align:left;min-width:180px}
+  .g-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .g-sum .kpi .val{font-size:18px}
+  @media print{
+    header,.tabs,#g-controls{display:none!important}
+    body{background:#fff}
+    .wrap{max-width:none;padding:0;margin:0}
+    .card{border:none;box-shadow:none;margin:0;padding:0}
+    @page{size:A4 landscape;margin:12mm}
+    table.gapji{font-size:11px}
+  }
   @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.hide-sm{display:none}}
 </style>
 </head>
@@ -85,6 +107,7 @@
 <div class="wrap">
   <div class="tabs">
     <button data-tab="input" class="on">입력</button>
+    <button data-tab="gapji">일일 갑지</button>
     <button data-tab="board">일일 모판</button>
     <button data-tab="trend">월 추이</button>
     <button data-tab="pjt">PJT · 전망대비</button>
@@ -181,6 +204,21 @@
         <div class="balance-line big"><span>＝ 당일 시재</span><span class="num" id="b-close">0</span></div>
         <p class="note">‘혼합’ 기준: 오늘 이전은 실적, 오늘 이후는 전망으로 시재를 계산합니다.</p>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ GAPJI (daily report) ============ -->
+  <section id="tab-gapji" hidden>
+    <div class="card">
+      <div class="flex" id="g-controls" style="margin-bottom:6px">
+        <h2 style="margin:0">일일 자금수지 현황 (갑지)</h2>
+        <div class="right flex">
+          <input type="date" id="g-date" style="width:auto">
+          <button class="btn sec sm" id="g-print">🖨 인쇄 / PDF</button>
+          <button class="btn sec sm" id="g-xlsx">엑셀로 저장</button>
+        </div>
+      </div>
+      <div id="g-report"></div>
     </div>
   </section>
 
@@ -285,10 +323,44 @@ const KEY_E="jsuji_entries_v1", KEY_S="jsuji_settings_v1";
 
 const CATS={
   수금:["공사수입(기성)","공사수입(분양금)","공동원가 회입","받을어음 만기","어음 매각분 수금",
-       "국내법인 외화 수금","연결법인 시재 회입","대여금 회입","사업비 차입","배당수익","기타"],
+       "국내법인 외화 수금","연결법인 시재 회입","전사BS(이자,전사비 등)","지분 매각","시설 매각",
+       "대여금 회입","사업비 차입","배당수익","기타"],
   지출:["현장 전도금","현장 대금지급","본사 대금지급","지급어음 만기","처분손실","사업비 대출 이자",
        "국내 외화 지출","투자지출(지분)","투자지출(시설)","대여금 지출","입찰보증금",
        "사업비 대출 상환","법인세","배당 지출","기타"]
+};
+// 갑지(보고서) 행 정의: 표시명 ← 상세구분 매핑 (입력 세분과 보고 양식을 분리)
+const GAPJI={
+  입금:[
+    {label:"공사 수입(기성, 분양금)",cats:["공사수입(기성)","공사수입(분양금)"]},
+    {label:"공동원가 회입",cats:["공동원가 회입"]},
+    {label:"받을어음 만기",cats:["받을어음 만기"]},
+    {label:"채권 할인(받을어음 매각)",cats:["어음 매각분 수금"]},
+    {label:"국내 외화 수금",cats:["국내법인 외화 수금"]},
+    {label:"연결법인 시재 회입",cats:["연결법인 시재 회입"]},
+    {label:"전사BS(이자, 전사비 등)",cats:["전사BS(이자,전사비 등)"]},
+    {label:"기타",cats:["기타"]},
+    {label:"지분 매각",cats:["지분 매각"]},
+    {label:"시설 매각",cats:["시설 매각"]},
+    {label:"대여금 회입",cats:["대여금 회입"]},
+    {label:"사업비 차입",cats:["사업비 차입"]},
+    {label:"배당 수익",cats:["배당수익"]},
+  ],
+  지출:[
+    {label:"현장 전도금",cats:["현장 전도금"]},
+    {label:"현장 대금지급",cats:["현장 대금지급"]},
+    {label:"본사 대금지급",cats:["본사 대금지급"]},
+    {label:"지급어음 만기",cats:["지급어음 만기"]},
+    {label:"채권 처분손실",cats:["처분손실"]},
+    {label:"사업비 대출 이자",cats:["사업비 대출 이자"]},
+    {label:"국내 외화 지출",cats:["국내 외화 지출"]},
+    {label:"투자지출(지분/시설)",cats:["투자지출(지분)","투자지출(시설)"]},
+    {label:"대여금 지출",cats:["대여금 지출"]},
+    {label:"입찰보증금",cats:["입찰보증금"]},
+    {label:"사업비 대출 상환",cats:["사업비 대출 상환"]},
+    {label:"법인세",cats:["법인세"]},
+    {label:"배당 지출",cats:["배당 지출"]},
+  ]
 };
 
 let entries=load(KEY_E,[]);
@@ -308,7 +380,8 @@ function signed(e){return e.type==="수금"?e.amount:-e.amount;}
 /* ---------- tabs ---------- */
 $$(".tabs button").forEach(b=>b.onclick=()=>{
   $$(".tabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
-  ["input","board","trend","pjt","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
+  ["input","gapji","board","trend","pjt","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
+  if(b.dataset.tab==="gapji")renderGapji();
   if(b.dataset.tab==="board")renderBoard();
   if(b.dataset.tab==="trend")renderTrend();
   if(b.dataset.tab==="pjt")renderPjt();
@@ -418,6 +491,97 @@ function renderBoard(){
   $("#b-close").textContent=fmt(prev+inSum-outSum);
 }
 function prevDay(d){const x=new Date(d+"T00:00:00");x.setDate(x.getDate()-1);return x.toISOString().slice(0,10);}
+
+/* ---------- 갑지 (일일 보고) ---------- */
+$("#g-date").value=isoToday();
+$("#g-date").onchange=renderGapji;
+function gapjiCalc(D){
+  const prev=prevDay(D),yStart=D.slice(0,4)+"-01-01";
+  const line=(type,cats)=>{
+    const hit=e=>e.type===type&&cats.includes(e.category);
+    const sum=f=>entries.filter(e=>hit(e)&&f(e)).reduce((s,e)=>s+e.amount,0);
+    const ytd=sum(e=>e.plan==="실적"&&e.date>=yStart&&e.date<=D);
+    const pPlan=sum(e=>e.plan==="전망"&&e.date===prev);
+    const pReal=sum(e=>e.plan==="실적"&&e.date===prev);
+    const tPlan=sum(e=>e.plan==="전망"&&e.date===D);
+    const memos=[...new Set(entries.filter(e=>hit(e)&&e.plan==="전망"&&e.date===D&&e.memo).map(e=>e.memo))];
+    return {ytd,pPlan,pReal,tPlan,memo:memos.join(", ")};
+  };
+  const build=(blk,type)=>blk.map(l=>({label:l.label,...line(type,l.cats)}));
+  return {입금:build(GAPJI.입금,"수금"),지출:build(GAPJI.지출,"지출"),prev,D};
+}
+function gTot(rows){return rows.reduce((a,r)=>({ytd:a.ytd+r.ytd,pPlan:a.pPlan+r.pPlan,
+  pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan}),{ytd:0,pPlan:0,pReal:0,tPlan:0});}
+function ratioTxt(plan,real){if(!plan)return real?"신규":"-";return Math.round(real/plan*100)+"%";}
+function gapjiHtml(D){
+  const g=gapjiCalc(D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10);
+  const rowHtml=r=>{const diff=r.pReal-r.pPlan;
+    return `<tr><td class="lft">${esc(r.label)}</td>
+      <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
+      <td class="num mut">${r.pPlan?fmt(r.pPlan):"-"}</td>
+      <td class="num">${r.pReal?fmt(r.pReal):"-"}</td>
+      <td class="num">${ratioTxt(r.pPlan,r.pReal)}</td>
+      <td class="num ${diff<0?'out':diff>0?'in':''}">${diff?fmt(diff):"-"}</td>
+      <td class="num">${r.tPlan?fmt(r.tPlan):"-"}</td>
+      <td class="memo">${esc(r.memo)}</td></tr>`;};
+  const totHtml=(label,t)=>{const diff=t.pReal-t.pPlan;
+    return `<tr class="row-tot"><td class="lft">${label}</td>
+      <td class="num">${fmt(t.ytd)}</td><td class="num">${fmt(t.pPlan)}</td>
+      <td class="num">${fmt(t.pReal)}</td><td class="num">${ratioTxt(t.pPlan,t.pReal)}</td>
+      <td class="num ${diff<0?'out':diff>0?'in':''}">${fmt(diff)}</td>
+      <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;};
+  const inT=gTot(g.입금),outT=gTot(g.지출);
+  const prevBal=balanceAsOf(g.prev,"actual");
+  const todayBal=prevBal+inT.tPlan-outT.tPlan;
+  return `<div class="g-title"><h3>일일 자금수지 현황</h3><div class="d">${D}</div></div>
+    <div class="g-unit">(단위: ${esc(settings.unit)})</div>
+    <div style="overflow:auto"><table class="gapji">
+    <thead>
+      <tr><th class="lft" rowspan="2">구분</th><th rowspan="2">'${yr}년 실적</th>
+        <th colspan="4">전일 계획/실적 (${pd}일)</th>
+        <th colspan="2">금일 계획 (${dd}일)</th></tr>
+      <tr><th>계획</th><th>실적</th><th>계획比</th><th>차이</th>
+        <th>계획</th><th class="lft">내용</th></tr>
+    </thead><tbody>
+    <tr class="grp"><td colspan="8">입금</td></tr>
+    ${g.입금.map(rowHtml).join("")}
+    ${totHtml("입금 계",inT)}
+    <tr class="grp"><td colspan="8">지출</td></tr>
+    ${g.지출.map(rowHtml).join("")}
+    ${totHtml("지출 계",outT)}
+    </tbody></table></div>
+    <div class="g-sum">
+      <div class="kpi"><div class="lbl">전일 시재(실적)</div><div class="val num">${fmt(prevBal)}</div></div>
+      <div class="kpi"><div class="lbl">금일 입금(계획)</div><div class="val num in">${fmt(inT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 지출(계획)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 예상 시재</div><div class="val num">${fmt(todayBal)}</div></div>
+    </div>
+    <p class="note">계획=전망, 실적=실적. ‘실적’ 열의 연간 값은 연초부터 선택일까지 실적 누계입니다.</p>`;
+}
+function renderGapji(){$("#g-report").innerHTML=gapjiHtml($("#g-date").value||isoToday());}
+$("#g-print").onclick=()=>window.print();
+function gapjiRows(D){
+  const g=gapjiCalc(D),rows=[];
+  rows.push(["일일 자금수지 현황",D,"","","","","",""]);
+  rows.push(["구분","'"+D.slice(2,4)+"년 실적","전일 계획","전일 실적","계획比(%)","차이","금일 계획","내용"]);
+  const push=(blk)=>blk.forEach(r=>rows.push([r.label,r.ytd,r.pPlan,r.pReal,
+    r.pPlan?Math.round(r.pReal/r.pPlan*100):"",r.pReal-r.pPlan,r.tPlan,r.memo]));
+  const tot=(label,t)=>rows.push([label,t.ytd,t.pPlan,t.pReal,
+    t.pPlan?Math.round(t.pReal/t.pPlan*100):"",t.pReal-t.pPlan,t.tPlan,""]);
+  rows.push(["[입금]","","","","","","",""]);push(g.입금);tot("입금 계",gTot(g.입금));
+  rows.push(["[지출]","","","","","","",""]);push(g.지출);tot("지출 계",gTot(g.지출));
+  const inT=gTot(g.입금),outT=gTot(g.지출),prevBal=balanceAsOf(g.prev,"actual");
+  rows.push(["","","","","","","",""]);
+  rows.push(["전일 시재(실적)",prevBal,"","","","","",""]);
+  rows.push(["금일 예상 시재",prevBal+inT.tPlan-outT.tPlan,"","","","","",""]);
+  return rows;
+}
+$("#g-xlsx").onclick=()=>{
+  const D=$("#g-date").value||isoToday();
+  const blob=buildXlsx([{name:"일일갑지 "+D.slice(5),rows:gapjiRows(D)}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_갑지_"+D+".xlsx";a.click();
+};
 
 /* ---------- trend ---------- */
 $("#trend-month").value=isoToday().slice(0,7);
