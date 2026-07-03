@@ -219,6 +219,7 @@
         </div>
       </div>
       <div id="g-report"></div>
+      <div id="g-forecast" style="margin-top:24px"></div>
     </div>
   </section>
 
@@ -558,8 +559,80 @@ function gapjiHtml(D){
     </div>
     <p class="note">계획=전망, 실적=실적. ‘실적’ 열의 연간 값은 연초부터 선택일까지 실적 누계입니다.</p>`;
 }
-function renderGapji(){$("#g-report").innerHTML=gapjiHtml($("#g-date").value||isoToday());}
+/* 향후 N영업일 전망 (주말 제외) */
+function fmtDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function bizDays(startISO,n){
+  const W=["일","월","화","수","목","금","토"],out=[];
+  let d=new Date(startISO+"T12:00:00");
+  while(out.length<n){const w=d.getDay();if(w!==0&&w!==6)out.push({iso:fmtDate(d),dow:W[w]});d.setDate(d.getDate()+1);}
+  return out;
+}
+function forecastCalc(D,n){
+  const days=bizDays(D,n),today=isoToday();
+  const startBal=balanceAsOf(prevDay(days[0].iso),"mixed");
+  let ti=0,to=0,min=Infinity,minDay="";
+  const rows=days.map(x=>{
+    const de=entries.filter(e=>e.date===x.iso&&includeEntry(e,"mixed",today));
+    const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+    const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+    const bal=balanceAsOf(x.iso,"mixed");
+    ti+=i;to+=o;if(bal<min){min=bal;minDay=x.iso;}
+    return {iso:x.iso,dow:x.dow,i,o,net:i-o,bal};
+  });
+  return {days,rows,startBal,ti,to,min,minDay};
+}
+function miniLine(vals){
+  const W=920,H=150,pad={l:66,r:12,t:12,b:22};
+  let mn=Math.min(...vals,0),mx=Math.max(...vals,1);if(mn===mx)mx=mn+1;
+  const px=i=>pad.l+(W-pad.l-pad.r)*(i/(vals.length-1||1));
+  const py=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
+  const pts=vals.map((v,i)=>px(i).toFixed(1)+","+py(v).toFixed(1)).join(" ");
+  let g="";for(let k=0;k<=3;k++){const v=mn+(mx-mn)*k/3,y=py(v);
+    g+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eef1f6"/><text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#98a2b3">${fmt(v)}</text>`;}
+  const dots=vals.map((v,i)=>`<circle cx="${px(i)}" cy="${py(v)}" r="2.6" fill="${v<0?'#c0392b':'#2f6fb0'}"/>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}`+
+    (mn<0?`<line x1="${pad.l}" y1="${py(0)}" x2="${W-pad.r}" y2="${py(0)}" stroke="#c0392b" stroke-dasharray="3 3"/>`:"")+
+    `<polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>${dots}</svg>`;
+}
+function forecastHtml(D){
+  const f=forecastCalc(D,10),warn=f.min<0;
+  const kpi=(l,v,c)=>`<div class="kpi"><div class="lbl">${l}</div><div class="val num ${c||''}">${v}</div></div>`;
+  const body=f.rows.map(r=>`<tr${r.bal<0?' style="background:#fdecea"':''}>
+      <td class="lft">${r.iso.slice(5)} (${r.dow})</td>
+      <td class="num in">${r.i?fmt(r.i):"-"}</td>
+      <td class="num out">${r.o?fmt(r.o):"-"}</td>
+      <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
+      <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td></tr>`).join("");
+  return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 혼합 기준(미래=계획)</small></h2>
+    <div class="kpis">
+      ${kpi("기준 시재",fmt(f.startBal))}
+      ${kpi("10일 입금(계획)",fmt(f.ti),"in")}
+      ${kpi("10일 지출(계획)",fmt(f.to),"out")}
+      ${kpi("최저 예상 시재",fmt(f.min)+(f.minDay?" ("+f.minDay.slice(5)+")":""),warn?"out":"")}
+    </div>
+    ${warn?`<p class="note" style="color:#c0392b;font-weight:700">⚠ ${f.minDay.slice(5)}에 예상 시재가 마이너스입니다. 자금 조달·집행 조정이 필요합니다.</p>`:""}
+    <div class="card" style="box-shadow:none;background:#fbfcfe"><h2 style="font-size:13px">예상 시재 추이 (10영업일)</h2>${miniLine(f.rows.map(r=>r.bal))}</div>
+    <div style="overflow:auto"><table>
+      <thead><tr><th class="lft">일자(요일)</th><th>입금</th><th>지출</th><th>순증감</th><th>예상 시재</th></tr></thead>
+      <tbody>${body}
+      <tr class="row-tot"><td class="lft">합계</td><td class="num in">${fmt(f.ti)}</td>
+        <td class="num out">${fmt(f.to)}</td><td class="num">${fmt(f.ti-f.to)}</td>
+        <td class="num">${fmt(f.rows.length?f.rows[f.rows.length-1].bal:f.startBal)}</td></tr></tbody></table></div>`;
+}
+function renderGapji(){
+  const D=$("#g-date").value||isoToday();
+  $("#g-report").innerHTML=gapjiHtml(D);
+  $("#g-forecast").innerHTML=forecastHtml(D);
+}
 $("#g-print").onclick=()=>window.print();
+function forecastRows(D){
+  const f=forecastCalc(D,10),rows=[["향후 10영업일 자금 전망 (기준일 "+D+")","","","",""]];
+  rows.push(["일자","요일","입금(계획)","지출(계획)","순증감","예상 시재"]);
+  rows.push(["기준 시재","","","","",f.startBal]);
+  f.rows.forEach(r=>rows.push([r.iso,r.dow,r.i,r.o,r.net,r.bal]));
+  rows.push(["합계","",f.ti,f.to,f.ti-f.to,f.rows.length?f.rows[f.rows.length-1].bal:f.startBal]);
+  return rows;
+}
 function gapjiRows(D){
   const g=gapjiCalc(D),rows=[];
   rows.push(["일일 자금수지 현황",D,"","","","","",""]);
@@ -578,7 +651,8 @@ function gapjiRows(D){
 }
 $("#g-xlsx").onclick=()=>{
   const D=$("#g-date").value||isoToday();
-  const blob=buildXlsx([{name:"일일갑지 "+D.slice(5),rows:gapjiRows(D)}]);
+  const blob=buildXlsx([{name:"일일갑지 "+D.slice(5),rows:gapjiRows(D)},
+    {name:"10영업일 전망",rows:forecastRows(D)}]);
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_갑지_"+D+".xlsx";a.click();
 };
