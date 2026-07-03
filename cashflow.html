@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>자금수지 모판</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --panel:#ffffff; --ink:#1f2733; --muted:#6b7688;
+    --line:#e3e8f0; --line2:#eef1f6;
+    --in:#1a7f5a; --in-bg:#e7f6ef;      /* 수금 */
+    --out:#c0392b; --out-bg:#fdecea;    /* 지출 */
+    --plan:#2f6fb0; --accent:#2f6fb0;
+    --shadow:0 1px 3px rgba(20,30,50,.06),0 6px 20px rgba(20,30,50,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:14px;line-height:1.45}
+  header{background:linear-gradient(135deg,#243b53,#334e68);color:#fff;padding:16px 22px}
+  header h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.3px}
+  header p{margin:4px 0 0;font-size:12.5px;color:#c9d6e5}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button{border:1px solid var(--line);background:#fff;color:var(--muted);
+    padding:9px 16px;border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:600}
+  .tabs button.on{background:#243b53;color:#fff;border-color:#243b53}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+  .card h2{margin:0 0 14px;font-size:15px;font-weight:700}
+  .card h2 small{font-weight:500;color:var(--muted);font-size:12px;margin-left:8px}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px;font-weight:600}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+    font-size:13.5px;background:#fff;color:var(--ink);font-family:inherit}
+  input:focus,select:focus{outline:2px solid #cdduedff;outline-color:#bcd3ee;border-color:#7ba7d4}
+  .grid{display:grid;gap:12px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:700;
+    cursor:pointer;background:#243b53;color:#fff}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.sec{background:#eef1f6;color:#33445a}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+  .btn.danger{background:var(--out-bg);color:var(--out)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;border:none;background:#fff;padding:8px;cursor:pointer;font-weight:700;
+    font-size:13px;color:var(--muted)}
+  .seg button.on-in{background:var(--in-bg);color:var(--in)}
+  .seg button.on-out{background:var(--out-bg);color:var(--out)}
+  .seg button.on-plan{background:#eaf1f9;color:var(--plan)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line2);text-align:right;white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:12px;background:#fafbfd;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  td.lft,th.lft{text-align:left}
+  tbody tr:hover{background:#fafcff}
+  .num{font-variant-numeric:tabular-nums}
+  .in{color:var(--in)} .out{color:var(--out)} .mut{color:var(--muted)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700}
+  .pill.in{background:var(--in-bg);color:var(--in)}
+  .pill.out{background:var(--out-bg);color:var(--out)}
+  .pill.plan{background:#eaf1f9;color:var(--plan)}
+  .pill.real{background:#eef7ee;color:#2e7d32}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .kpi .lbl{font-size:12px;color:var(--muted);font-weight:600}
+  .kpi .val{font-size:22px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums}
+  .row-tot td{font-weight:800;border-top:2px solid var(--line);background:#f8fafc}
+  .sub{color:var(--muted);font-size:12px}
+  .flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .right{margin-left:auto}
+  .empty{color:var(--muted);text-align:center;padding:26px;font-size:13px}
+  .balance-line{display:flex;justify-content:space-between;padding:10px 14px;border-radius:9px;
+    background:#f7f9fc;margin-top:6px;font-weight:700}
+  .balance-line.big{background:#243b53;color:#fff;font-size:16px}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>자금수지 모판</h1>
+  <p>일별 수금·지출 · 전망/실적 · PJT별 수금 · 시재 추이 — 브라우저에 자동 저장됩니다</p>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button data-tab="input" class="on">입력</button>
+    <button data-tab="board">일일 모판</button>
+    <button data-tab="trend">월 추이</button>
+    <button data-tab="pjt">PJT · 전망대비</button>
+    <button data-tab="settings">설정 · 백업</button>
+  </div>
+
+  <!-- ============ INPUT ============ -->
+  <section id="tab-input">
+    <div class="card">
+      <h2>내역 입력 <small>한 건씩 추가하면 모든 화면에 자동 반영됩니다</small></h2>
+      <div class="grid" style="grid-template-columns:1.1fr 1fr;align-items:start">
+        <div class="grid" style="grid-template-columns:1fr 1fr">
+          <div>
+            <label>일자</label>
+            <input type="date" id="f-date">
+          </div>
+          <div>
+            <label>구분</label>
+            <div class="seg" id="f-type">
+              <button type="button" data-v="수금" class="on-in">수금</button>
+              <button type="button" data-v="지출">지출</button>
+            </div>
+          </div>
+          <div>
+            <label>전망 / 실적</label>
+            <div class="seg" id="f-plan">
+              <button type="button" data-v="전망" class="on-plan">전망</button>
+              <button type="button" data-v="실적">실적</button>
+            </div>
+          </div>
+          <div>
+            <label>금액 <span id="unit-lbl2" class="sub"></span></label>
+            <input type="text" id="f-amount" inputmode="numeric" placeholder="예: 1,200">
+          </div>
+          <div style="grid-column:1/3">
+            <label>상세구분</label>
+            <select id="f-cat"></select>
+          </div>
+          <div id="f-pjt-box" style="grid-column:1/3">
+            <label>PJT <span class="sub">(수금만)</span></label>
+            <input type="text" id="f-pjt" list="pjt-list" placeholder="예: A현장 / 자유 입력">
+            <datalist id="pjt-list"></datalist>
+          </div>
+          <div style="grid-column:1/3">
+            <label>메모</label>
+            <input type="text" id="f-memo" placeholder="예: 3차 기성">
+          </div>
+          <div style="grid-column:1/3">
+            <button class="btn" id="f-add" style="width:100%">＋ 추가</button>
+          </div>
+        </div>
+        <div>
+          <div class="flex" style="margin-bottom:8px">
+            <strong style="font-size:13px">최근 입력</strong>
+            <span class="right sub" id="recent-count"></span>
+          </div>
+          <div style="max-height:420px;overflow:auto;border:1px solid var(--line2);border-radius:8px">
+            <table id="recent-tbl"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BOARD ============ -->
+  <section id="tab-board" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:8px">
+        <h2 style="margin:0">일일 모판</h2>
+        <div class="right flex">
+          <span class="sub">시재 기준</span>
+          <select id="board-mode" style="width:auto">
+            <option value="mixed">혼합(과거 실적·미래 전망)</option>
+            <option value="actual">실적</option>
+            <option value="forecast">전망</option>
+          </select>
+          <input type="date" id="board-date" style="width:auto">
+        </div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <h2 style="font-size:13.5px;color:var(--in)">수금</h2>
+          <table id="board-in"></table>
+        </div>
+        <div>
+          <h2 style="font-size:13.5px;color:var(--out)">지출</h2>
+          <table id="board-out"></table>
+        </div>
+      </div>
+      <div style="margin-top:16px;max-width:520px;margin-left:auto">
+        <div class="balance-line"><span>전일 시재</span><span class="num" id="b-prev">0</span></div>
+        <div class="balance-line"><span>＋ 당일 수금</span><span class="num in" id="b-in">0</span></div>
+        <div class="balance-line"><span>－ 당일 지출</span><span class="num out" id="b-out">0</span></div>
+        <div class="balance-line big"><span>＝ 당일 시재</span><span class="num" id="b-close">0</span></div>
+        <p class="note">‘혼합’ 기준: 오늘 이전은 실적, 오늘 이후는 전망으로 시재를 계산합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TREND ============ -->
+  <section id="tab-trend" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:12px">
+        <h2 style="margin:0">월 추이</h2>
+        <div class="right flex">
+          <span class="sub">시재 기준</span>
+          <select id="trend-mode" style="width:auto">
+            <option value="mixed">혼합(과거 실적·미래 전망)</option>
+            <option value="actual">실적</option>
+            <option value="forecast">전망</option>
+          </select>
+          <input type="month" id="trend-month" style="width:auto">
+        </div>
+      </div>
+      <div class="kpis" id="trend-kpis"></div>
+      <div class="card" style="box-shadow:none;background:#fbfcfe">
+        <h2 style="font-size:13px">누적 시재 추이</h2>
+        <div id="trend-chart"></div>
+      </div>
+      <div style="overflow:auto">
+        <table id="trend-tbl"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PJT / PLAN vs ACTUAL ============ -->
+  <section id="tab-pjt" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:12px">
+        <h2 style="margin:0">PJT별 수금 · 전망대비 실적</h2>
+        <div class="right flex">
+          <input type="month" id="pjt-month" style="width:auto">
+          <button class="btn sec sm" id="pjt-all">전체기간</button>
+        </div>
+      </div>
+      <h2 style="font-size:13.5px">PJT별 수금 (전망 vs 실적)</h2>
+      <table id="pjt-tbl"></table>
+      <h2 style="font-size:13.5px;margin-top:22px">상세구분별 전망 vs 실적</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+        <div><table id="cat-in-tbl"></table></div>
+        <div><table id="cat-out-tbl"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="tab-settings" hidden>
+    <div class="card">
+      <h2>기초 시재 · 단위</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;max-width:640px">
+        <div>
+          <label>기준일 (이 날부터 시재 계산)</label>
+          <input type="date" id="s-basedate">
+        </div>
+        <div>
+          <label>기준일 개시 시재 <span class="sub">(전일 마감액)</span></label>
+          <input type="text" id="s-basebal" inputmode="numeric" placeholder="예: 50,000">
+        </div>
+        <div>
+          <label>금액 단위 (표시용)</label>
+          <select id="s-unit">
+            <option>백만원</option><option>천원</option><option>원</option><option>억원</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" id="s-save" style="margin-top:14px">저장</button>
+    </div>
+    <div class="card">
+      <h2>백업 · 복원</h2>
+      <div class="flex">
+        <button class="btn sec" id="s-export">CSV 내보내기</button>
+        <label class="btn sec" style="cursor:pointer">CSV 불러오기(추가)
+          <input type="file" id="s-import" accept=".csv" hidden></label>
+        <button class="btn sec" id="s-sample">샘플 데이터 넣기</button>
+        <button class="btn danger right" id="s-clear">전체 삭제</button>
+      </div>
+      <p class="note">데이터는 이 브라우저에만 저장됩니다. 다른 PC로 옮기거나 백업하려면 CSV로 내보내세요.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEY_E="jsuji_entries_v1", KEY_S="jsuji_settings_v1";
+
+const CATS={
+  수금:["공사수입(기성)","공사수입(분양금)","공동원가 회입","받을어음 만기","어음 매각분 수금",
+       "국내법인 외화 수금","연결법인 시재 회입","대여금 회입","사업비 차입","배당수익","기타"],
+  지출:["현장 전도금","현장 대금지급","본사 대금지급","지급어음 만기","처분손실","사업비 대출 이자",
+       "국내 외화 지출","투자지출(지분)","투자지출(시설)","대여금 지출","입찰보증금",
+       "사업비 대출 상환","법인세","배당 지출","기타"]
+};
+
+let entries=load(KEY_E,[]);
+let settings=load(KEY_S,{baseDate:isoToday(),baseBalance:0,unit:"백만원"});
+let form={type:"수금",plan:"전망"};
+
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
+function save(){localStorage.setItem(KEY_E,JSON.stringify(entries));
+  localStorage.setItem(KEY_S,JSON.stringify(settings));}
+function isoToday(){const d=new Date();return d.toISOString().slice(0,10);}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function fmt(n){return (Math.round(n)).toLocaleString("ko-KR");}
+function parseNum(s){return Number(String(s).replace(/[^0-9.-]/g,""))||0;}
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function signed(e){return e.type==="수금"?e.amount:-e.amount;}
+
+/* ---------- tabs ---------- */
+$$(".tabs button").forEach(b=>b.onclick=()=>{
+  $$(".tabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  ["input","board","trend","pjt","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
+  if(b.dataset.tab==="board")renderBoard();
+  if(b.dataset.tab==="trend")renderTrend();
+  if(b.dataset.tab==="pjt")renderPjt();
+});
+
+/* ---------- input form ---------- */
+$("#f-date").value=isoToday();
+function segBind(sel,key,onIn,onOut){
+  $$(sel+" button").forEach(b=>b.onclick=()=>{
+    form[key]=b.dataset.v;
+    $$(sel+" button").forEach(x=>x.className="");
+    b.classList.add(b.dataset.v==="수금"?"on-in":b.dataset.v==="지출"?"on-out":"on-plan");
+    if(sel==="#f-type")syncCat();
+  });
+}
+segBind("#f-type","type");segBind("#f-plan","plan");
+function syncCat(){
+  const isIn=form.type==="수금";
+  $("#f-cat").innerHTML=CATS[form.type].map(c=>`<option>${c}</option>`).join("");
+  $("#f-pjt-box").style.display=isIn?"":"none";
+  // fix seg colors for type
+  $$("#f-type button").forEach(b=>b.className=b.dataset.v===form.type?(form.type==="수금"?"on-in":"on-out"):"");
+}
+function refreshPjtList(){
+  const ps=[...new Set(entries.filter(e=>e.project).map(e=>e.project))];
+  $("#pjt-list").innerHTML=ps.map(p=>`<option value="${esc(p)}">`).join("");
+}
+$("#f-add").onclick=()=>{
+  const amt=parseNum($("#f-amount").value);
+  if(!amt){$("#f-amount").focus();return;}
+  entries.push({id:uid(),date:$("#f-date").value||isoToday(),type:form.type,
+    category:$("#f-cat").value,project:form.type==="수금"?$("#f-pjt").value.trim():"",
+    plan:form.plan,amount:amt,memo:$("#f-memo").value.trim()});
+  save();$("#f-amount").value="";$("#f-memo").value="";
+  refreshPjtList();renderRecent();
+  $("#f-amount").focus();
+};
+$("#f-amount").addEventListener("keydown",e=>{if(e.key==="Enter")$("#f-add").click();});
+
+function renderRecent(){
+  const rows=[...entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,40);
+  $("#recent-count").textContent="총 "+entries.length+"건";
+  if(!rows.length){$("#recent-tbl").innerHTML='<tr><td class="empty">아직 입력이 없습니다</td></tr>';return;}
+  $("#recent-tbl").innerHTML=
+    `<thead><tr><th class="lft">일자</th><th class="lft">내역</th><th>금액</th><th></th></tr></thead><tbody>`+
+    rows.map(e=>`<tr>
+      <td class="lft mut">${e.date.slice(5)}</td>
+      <td class="lft"><span class="pill ${e.type==='수금'?'in':'out'}">${e.type}</span>
+        <span class="pill ${e.plan==='전망'?'plan':'real'}">${e.plan}</span>
+        ${esc(e.category)}${e.project?` · <span class="mut">${esc(e.project)}</span>`:""}
+        ${e.memo?`<div class="sub">${esc(e.memo)}</div>`:""}</td>
+      <td class="num ${e.type==='수금'?'in':'out'}">${fmt(e.amount)}</td>
+      <td><button class="btn danger sm" data-del="${e.id}">×</button></td></tr>`).join("")+`</tbody>`;
+  $$("#recent-tbl [data-del]").forEach(b=>b.onclick=()=>{
+    entries=entries.filter(e=>e.id!==b.dataset.del);save();renderRecent();refreshPjtList();});
+}
+
+/* ---------- balance engine ---------- */
+function includeEntry(e,mode,today){
+  if(mode==="actual")return e.plan==="실적";
+  if(mode==="forecast")return e.plan==="전망";
+  return e.plan==="실적" ? true : e.date>=today;   // mixed
+}
+// closing balance up to & including date D
+function balanceAsOf(D,mode){
+  const today=isoToday();let b=settings.baseBalance;
+  for(const e of entries){
+    if(e.date<settings.baseDate||e.date>D)continue;
+    if(includeEntry(e,mode,today))b+=signed(e);
+  }
+  return b;
+}
+
+/* ---------- board ---------- */
+$("#board-date").value=isoToday();
+$("#board-date").onchange=renderBoard;$("#board-mode").onchange=renderBoard;
+function boardTable(type,date){
+  const rows=CATS[type].map(cat=>{
+    const es=entries.filter(e=>e.type===type&&e.category===cat&&e.date===date);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {cat,plan,real};
+  }).filter(r=>r.plan||r.real);
+  const tp=rows.reduce((s,r)=>s+r.plan,0),tr=rows.reduce((s,r)=>s+r.real,0);
+  const cls=type==="수금"?"in":"out";
+  let h=`<thead><tr><th class="lft">상세구분</th><th>전망</th><th>실적</th></tr></thead><tbody>`;
+  if(!rows.length)h+=`<tr><td colspan="3" class="empty">내역 없음</td></tr>`;
+  else h+=rows.map(r=>`<tr><td class="lft">${esc(r.cat)}</td>
+      <td class="num mut">${r.plan?fmt(r.plan):"-"}</td>
+      <td class="num ${cls}">${r.real?fmt(r.real):"-"}</td></tr>`).join("");
+  h+=`<tr class="row-tot"><td class="lft">합계</td><td class="num">${fmt(tp)}</td><td class="num ${cls}">${fmt(tr)}</td></tr></tbody>`;
+  return {html:h,plan:tp,real:tr};
+}
+function renderBoard(){
+  const date=$("#board-date").value||isoToday(),mode=$("#board-mode").value;
+  const bi=boardTable("수금",date),bo=boardTable("지출",date);
+  $("#board-in").innerHTML=bi.html;$("#board-out").innerHTML=bo.html;
+  // day figures per mode
+  const today=isoToday();
+  const dayEntries=entries.filter(e=>e.date===date&&includeEntry(e,mode,today));
+  const inSum=dayEntries.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+  const outSum=dayEntries.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+  const prev=balanceAsOf(prevDay(date),mode);
+  $("#b-prev").textContent=fmt(prev);
+  $("#b-in").textContent="＋ "+fmt(inSum);
+  $("#b-out").textContent="－ "+fmt(outSum);
+  $("#b-close").textContent=fmt(prev+inSum-outSum);
+}
+function prevDay(d){const x=new Date(d+"T00:00:00");x.setDate(x.getDate()-1);return x.toISOString().slice(0,10);}
+
+/* ---------- trend ---------- */
+$("#trend-month").value=isoToday().slice(0,7);
+$("#trend-month").onchange=renderTrend;$("#trend-mode").onchange=renderTrend;
+function daysInMonth(ym){const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();}
+function renderTrend(){
+  const ym=$("#trend-month").value||isoToday().slice(0,7),mode=$("#trend-mode").value,today=isoToday();
+  const nd=daysInMonth(ym);const rows=[];let monIn=0,monOut=0;
+  for(let d=1;d<=nd;d++){
+    const date=`${ym}-${String(d).padStart(2,"0")}`;
+    const de=entries.filter(e=>e.date===date&&includeEntry(e,mode,today));
+    const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+    const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+    monIn+=i;monOut+=o;
+    rows.push({date,d,i,o,net:i-o,bal:balanceAsOf(date,mode)});
+  }
+  const first=balanceAsOf(prevDay(ym+"-01"),mode);
+  const last=rows[rows.length-1].bal;
+  $("#trend-kpis").innerHTML=[
+    ["월초 시재",first,""],["월 수금",monIn,"in"],["월 지출",monOut,"out"],["월말 시재",last,""]
+  ].map(([l,v,c])=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c}">${fmt(v)}</div></div>`).join("");
+  // table (only days with activity)
+  const act=rows.filter(r=>r.i||r.o);
+  $("#trend-tbl").innerHTML=
+    `<thead><tr><th class="lft">일자</th><th>수금</th><th>지출</th><th>순증감</th><th>누적 시재</th></tr></thead><tbody>`+
+    (act.length?act.map(r=>`<tr><td class="lft">${r.date.slice(5)}</td>
+      <td class="num in">${r.i?fmt(r.i):"-"}</td><td class="num out">${r.o?fmt(r.o):"-"}</td>
+      <td class="num ${r.net>=0?'in':'out'}">${fmt(r.net)}</td>
+      <td class="num">${fmt(r.bal)}</td></tr>`).join("")
+     :`<tr><td colspan="5" class="empty">이 달 내역이 없습니다</td></tr>`)+`</tbody>`;
+  drawChart(rows);
+}
+function drawChart(rows){
+  const W=920,H=240,pad={l:64,r:16,t:16,b:24};
+  const xs=rows.map(r=>r.d),ys=rows.map(r=>r.bal);
+  let mn=Math.min(...ys,0),mx=Math.max(...ys,1);if(mn===mx){mx=mn+1;}
+  const px=i=>pad.l+(W-pad.l-pad.r)*(i/(rows.length-1||1));
+  const py=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
+  const pts=rows.map((r,i)=>`${px(i).toFixed(1)},${py(r.bal).toFixed(1)}`).join(" ");
+  const area=`${pad.l},${py(mn)} ${pts} ${px(rows.length-1)},${py(mn)}`;
+  const zero=py(0);
+  let grid="";for(let g=0;g<=4;g++){const v=mn+(mx-mn)*g/4,y=py(v);
+    grid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eef1f6"/>
+           <text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#98a2b3">${fmt(v)}</text>`;}
+  let xlab="";const step=Math.ceil(rows.length/12);
+  rows.forEach((r,i)=>{if(i%step===0)xlab+=`<text x="${px(i)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#98a2b3">${r.d}</text>`;});
+  $("#trend-chart").innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    ${grid}
+    ${mn<0?`<line x1="${pad.l}" y1="${zero}" x2="${W-pad.r}" y2="${zero}" stroke="#c0392b" stroke-dasharray="3 3"/>`:""}
+    <polygon points="${area}" fill="#2f6fb0" opacity="0.08"/>
+    <polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>
+    ${xlab}</svg>`;
+}
+
+/* ---------- pjt / plan vs actual ---------- */
+$("#pjt-month").value=isoToday().slice(0,7);
+$("#pjt-month").onchange=renderPjt;
+$("#pjt-all").onclick=()=>{$("#pjt-month").value="";renderPjt();};
+function renderPjt(){
+  const ym=$("#pjt-month").value;
+  const scope=entries.filter(e=>!ym||e.date.slice(0,7)===ym);
+  // PJT table (수금 only)
+  const ins=scope.filter(e=>e.type==="수금");
+  const pjts=[...new Set(ins.map(e=>e.project||"(미지정)"))];
+  const prow=pjts.map(p=>{
+    const es=ins.filter(e=>(e.project||"(미지정)")===p);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {p,plan,real};
+  }).sort((a,b)=>(b.plan+b.real)-(a.plan+a.real));
+  $("#pjt-tbl").innerHTML=pjtTableHtml(prow,"PJT");
+  $("#cat-in-tbl").innerHTML=catTableHtml(scope,"수금");
+  $("#cat-out-tbl").innerHTML=catTableHtml(scope,"지출");
+}
+function achv(plan,real){if(!plan)return real?'<span class="pill real">신규</span>':"-";
+  const r=Math.round(real/plan*100);return `<span class="num ${r>=100?'in':r>=70?'':'out'}">${r}%</span>`;}
+function pjtTableHtml(rows,head){
+  const tp=rows.reduce((s,r)=>s+r.plan,0),tr=rows.reduce((s,r)=>s+r.real,0);
+  if(!rows.length)return `<thead><tr><th class="lft">${head}</th><th>전망</th><th>실적</th><th>달성</th></tr></thead><tbody><tr><td colspan="4" class="empty">내역 없음</td></tr></tbody>`;
+  return `<thead><tr><th class="lft">${head}</th><th>전망</th><th>실적</th><th>달성</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td class="lft">${esc(r.p)}</td><td class="num mut">${fmt(r.plan)}</td>
+      <td class="num in">${fmt(r.real)}</td><td>${achv(r.plan,r.real)}</td></tr>`).join("")+
+    `<tr class="row-tot"><td class="lft">합계</td><td class="num">${fmt(tp)}</td><td class="num">${fmt(tr)}</td><td>${achv(tp,tr)}</td></tr></tbody>`;
+}
+function catTableHtml(scope,type){
+  const cls=type==="수금"?"in":"out";
+  const rows=CATS[type].map(cat=>{
+    const es=scope.filter(e=>e.type===type&&e.category===cat);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {cat,plan,real};
+  }).filter(r=>r.plan||r.real);
+  const tp=rows.reduce((s,r)=>s+r.plan,0),tr=rows.reduce((s,r)=>s+r.real,0);
+  let h=`<thead><tr><th class="lft">${type} 상세구분</th><th>전망</th><th>실적</th><th>달성</th></tr></thead><tbody>`;
+  h+=rows.length?rows.map(r=>`<tr><td class="lft">${esc(r.cat)}</td><td class="num mut">${fmt(r.plan)}</td>
+      <td class="num ${cls}">${fmt(r.real)}</td><td>${achv(r.plan,r.real)}</td></tr>`).join("")
+    :`<tr><td colspan="4" class="empty">내역 없음</td></tr>`;
+  h+=`<tr class="row-tot"><td class="lft">합계</td><td class="num">${fmt(tp)}</td><td class="num ${cls}">${fmt(tr)}</td><td>${achv(tp,tr)}</td></tr></tbody>`;
+  return h;
+}
+
+/* ---------- settings / backup ---------- */
+function fillSettings(){
+  $("#s-basedate").value=settings.baseDate;$("#s-basebal").value=fmt(settings.baseBalance);
+  $("#s-unit").value=settings.unit;
+  $("#unit-lbl2").textContent="("+settings.unit+")";
+}
+$("#s-save").onclick=()=>{
+  settings.baseDate=$("#s-basedate").value||isoToday();
+  settings.baseBalance=parseNum($("#s-basebal").value);
+  settings.unit=$("#s-unit").value;save();fillSettings();
+  alert("저장했습니다.");
+};
+$("#s-export").onclick=()=>{
+  const head=["일자","구분","상세구분","PJT","전망실적","금액","메모"];
+  const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
+  const csv=[head.join(",")].concat(entries.map(e=>
+    [e.date,e.type,e.category,e.project,e.plan,e.amount,e.memo].map(q).join(","))).join("\r\n");
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_"+isoToday()+".csv";a.click();
+};
+$("#s-import").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{
+    const added=parseCsv(r.result);entries=entries.concat(added);save();
+    refreshPjtList();renderRecent();alert(added.length+"건을 추가했습니다.");
+  };r.readAsText(f);e.target.value="";
+};
+function parseCsv(text){
+  const rows=[];let i=0,field="",row=[],q=false;
+  text=text.replace(/^﻿/,"");
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){field+='"';i++;}else q=false;}else field+=c;}
+    else{if(c==='"')q=true;else if(c===","){row.push(field);field="";}
+      else if(c==="\n"){row.push(field);rows.push(row);row=[];field="";}
+      else if(c!=="\r")field+=c;}
+    i++;}
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  const out=[];
+  for(let k=1;k<rows.length;k++){const r=rows[k];if(r.length<6||!r[0])continue;
+    out.push({id:uid(),date:r[0].trim(),type:r[1].trim()==="지출"?"지출":"수금",
+      category:r[2].trim(),project:r[3].trim(),plan:r[4].trim()==="실적"?"실적":"전망",
+      amount:parseNum(r[5]),memo:(r[6]||"").trim()});}
+  return out;
+}
+$("#s-clear").onclick=()=>{if(confirm("모든 데이터를 삭제할까요? 되돌릴 수 없습니다."))
+  {entries=[];save();refreshPjtList();renderRecent();alert("삭제했습니다.");}};
+$("#s-sample").onclick=()=>{
+  const t=isoToday(),ym=t.slice(0,7);const d=n=>`${ym}-${String(n).padStart(2,"0")}`;
+  const s=[
+    [d(2),"수금","공사수입(기성)","A현장","실적",1200,"2차 기성"],
+    [d(2),"지출","현장 대금지급","","실적",800,""],
+    [d(3),"수금","공사수입(분양금)","B현장","실적",3000,"중도금"],
+    [d(3),"수금","받을어음 만기","A현장","전망",500,""],
+    [d(3),"지출","본사 대금지급","","실적",450,""],
+    [d(5),"수금","사업비 차입","C현장","전망",5000,"PF 인출"],
+    [d(5),"지출","사업비 대출 이자","","전망",120,""],
+    [d(10),"지출","법인세","","전망",2200,"중간예납"],
+    [d(15),"수금","대여금 회입","","전망",800,""],
+    [d(20),"지출","지급어음 만기","","전망",1500,""],
+  ];
+  s.forEach(r=>entries.push({id:uid(),date:r[0],type:r[1],category:r[2],project:r[3],plan:r[4],amount:r[5],memo:r[6]}));
+  if(!settings.baseBalance){settings.baseDate=d(1);settings.baseBalance=50000;}
+  save();refreshPjtList();renderRecent();fillSettings();alert("샘플 10건을 넣었습니다. 각 탭을 확인해 보세요.");
+};
+
+/* ---------- init ---------- */
+syncCat();fillSettings();refreshPjtList();renderRecent();
+</script>
+</body>
+</html>
