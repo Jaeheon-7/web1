@@ -665,7 +665,7 @@ function planVarHtml(plan,real){if(!plan&&!real)return "-";const d=real-plan;
 function gapjiHtml(D,region){
   region=region||"국내";
   const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
-  const eD=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" value="${esc(r.diff)}" placeholder="계획대비 주요 차이">`;
+  const eD=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" value="${esc(r.diff)}">`;
   const eN=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="note" data-l="${esc(r.label)}" value="${esc(r.note)}">`;
   const rowHtml=r=>`<tr><td class="lft">${esc(r.label)}</td>
       <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
