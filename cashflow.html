@@ -770,15 +770,17 @@ function bizDays(startISO,n){
   return out;
 }
 function forecastCalc(D,n){
-  const days=bizDays(D,n),today=isoToday();
-  const startBal=balanceAsOf(prevDay(days[0].iso),"mixed");
+  const days=bizDays(D,n),today=isoToday(),dom=DOM();
+  // 국내 시재 기준: 기준 시재 = 갑지 국내시재 '26 실적(=기초값+'26 수지차, 전일까지), 이후 일별 수지차 누적
+  const g=gapjiCalc("국내",D),inY=gTot(g.입금),outY=gTot(g.지출);
+  const startBal=(Number(settings.naeBase)||0)+(inY.ytd-outY.ytd);
+  const naeRun=x=>{let b=startBal;for(const e of dom){if(e.date>=D&&e.date<=x&&includeEntry(e,"forecast",today))b+=signed(e);}return b;};
   let ti=0,to=0,min=Infinity,minDay="";
-  const dom=DOM();
   const rows=days.map(x=>{
-    const de=dom.filter(e=>e.date===x.iso&&includeEntry(e,"mixed",today));
+    const de=dom.filter(e=>e.date===x.iso&&includeEntry(e,"forecast",today));
     const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
     const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
-    const bal=balanceAsOf(x.iso,"mixed");
+    const bal=naeRun(x.iso);
     ti+=i;to+=o;if(bal<min){min=bal;minDay=x.iso;}
     return {iso:x.iso,dow:x.dow,i,o,net:i-o,bal};
   });
@@ -806,7 +808,7 @@ function forecastHtml(D){
       <td class="num out">${r.o?fmt(r.o):"-"}</td>
       <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
       <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td></tr>`).join("");
-  return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 혼합 기준(미래=계획)</small></h2>
+  return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small></h2>
     <div class="kpis">
       ${kpi("기준 시재",fmt(f.startBal))}
       ${kpi("10일 입금(계획)",fmt(f.ti),"in")}
