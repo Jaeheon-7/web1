@@ -660,7 +660,8 @@ function gapjiCalc(region,D){
 }
 function gTot(rows){return rows.reduce((a,r)=>({ytd:a.ytd+r.ytd,pPlan:a.pPlan+r.pPlan,
   pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan}),{ytd:0,pPlan:0,pReal:0,tPlan:0});}
-function ratioTxt(plan,real){if(!plan)return real?"신규":"-";return Math.round(real/plan*100)+"%";}
+function planVarHtml(plan,real){if(!plan&&!real)return "-";const d=real-plan;
+  return `<span class="${d<0?'out':d>0?'in':''}">${fmt(d)}</span>`;}
 function gapjiHtml(D,region){
   region=region||"국내";
   const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
@@ -670,13 +671,13 @@ function gapjiHtml(D,region){
       <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
       <td class="num mut">${r.pPlan?fmt(r.pPlan):"-"}</td>
       <td class="num">${r.pReal?fmt(r.pReal):"-"}</td>
-      <td class="num">${ratioTxt(r.pPlan,r.pReal)}</td>
+      <td class="num">${planVarHtml(r.pPlan,r.pReal)}</td>
       <td class="memo">${eD(r)}</td>
       <td class="num">${r.tPlan?fmt(r.tPlan):"-"}</td>
       <td class="memo">${eN(r)}</td></tr>`;
   const totHtml=(label,t)=>`<tr class="row-tot"><td class="lft">${label}</td>
       <td class="num">${fmt(t.ytd)}</td><td class="num">${fmt(t.pPlan)}</td>
-      <td class="num">${fmt(t.pReal)}</td><td class="num">${ratioTxt(t.pPlan,t.pReal)}</td>
+      <td class="num">${fmt(t.pReal)}</td><td class="num">${planVarHtml(t.pPlan,t.pReal)}</td>
       <td class="memo"></td>
       <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;
   const inT=gTot(g.입금),outT=gTot(g.지출);
@@ -841,11 +842,11 @@ function forecastRows(D){
 function gapjiRows(D,region){
   region=region||"국내";const g=gapjiCalc(region,D),ov=region==="해외",rows=[];
   rows.push([(ov?"해외 ":"")+"자금수지 현황"+(ov?"(USD)":""),D,"","","","","",""]);
-  rows.push(["구분","'"+D.slice(2,4)+"년 실적","전일 계획","전일 실적","계획比(%)","차이","금일 계획","내용"]);
+  rows.push(["구분","'"+D.slice(2,4)+"년 실적","전일 계획","전일 실적","계획比(실적-계획)","차이","금일 계획","내용"]);
   const push=(blk)=>blk.forEach(r=>rows.push([r.label,r.ytd,r.pPlan,r.pReal,
-    r.pPlan?Math.round(r.pReal/r.pPlan*100):"",r.diff,r.tPlan,r.note]));
+    r.pReal-r.pPlan,r.diff,r.tPlan,r.note]));
   const tot=(label,t)=>rows.push([label,t.ytd,t.pPlan,t.pReal,
-    t.pPlan?Math.round(t.pReal/t.pPlan*100):"","",t.tPlan,""]);
+    t.pReal-t.pPlan,"",t.tPlan,""]);
   rows.push(["[입금]","","","","","","",""]);push(g.입금);tot("입금 계",gTot(g.입금));
   rows.push(["[지출]","","","","","","",""]);push(g.지출);tot("지출 계",gTot(g.지출));
   const inT=gTot(g.입금),outT=gTot(g.지출);
