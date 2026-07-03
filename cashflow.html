@@ -397,12 +397,13 @@ const GAPJI={
     {label:"사업비 대출 상환",cats:["사업비 대출 상환"]},
     {label:"법인세",cats:["법인세"]},
     {label:"배당 지출",cats:["배당 지출"]},
+    {label:"기타",cats:["기타"]},
   ]
 };
 // 해외 (USD 기준)
 const CATS_OV={
   수금:["단독 입금","JV입금","기타 수금"],
-  지출:["현장 전도금","업체 대금 지급","JV출금","국내 회입(시재 회수)"]
+  지출:["현장 전도금","업체 대금 지급","JV출금","기타","국내 회입(시재 회수)"]
 };
 const GAPJI_OV={
   입금:[
@@ -414,6 +415,7 @@ const GAPJI_OV={
     {label:"현장 전도금",cats:["현장 전도금"]},
     {label:"업체 대금 지급",cats:["업체 대금 지급"]},
     {label:"JV출금",cats:["JV출금"]},
+    {label:"기타",cats:["기타"]},
     {label:"국내 회입(시재 회수)",cats:["국내 회입(시재 회수)"]},
   ]
 };
@@ -423,6 +425,8 @@ const KEY_M="jsuji_manual_v1";
 let entries=load(KEY_E,[]);
 let settings=load(KEY_S,{baseDate:isoToday(),baseBalance:0,unit:"억원"});
 // 신규 설정 기본값 보정
+if(settings.unit==="백만원"&&!settings.unitFixed){settings.unit="억원";}
+settings.unitFixed=true;
 if(settings.fx==null)settings.fx=1350;
 if(settings.ovBaseBalance==null)settings.ovBaseBalance=0;
 if(settings.ytdBaseDate==null)settings.ytdBaseDate="2026-07-01";
@@ -599,7 +603,9 @@ function gapjiCalc(region,D){
   const line=(type,cats,label)=>{
     const hit=e=>e.type===type&&cats.includes(e.category);
     const sum=f=>data.filter(e=>hit(e)&&f(e)).reduce((s,e)=>s+e.amount,0);
-    const ytd=(Number(base[label])||0)+sum(e=>e.plan==="실적"&&e.date>ybd&&e.date<=D);
+    const realAfter=sum(e=>e.plan==="실적"&&e.date>ybd&&e.date<=D);
+    // 해외 '26 실적은 억원 기준: 기초값(억원) + 이후 실적(USD)×환율 환산
+    const ytd=(Number(base[label])||0)+(region==="해외"?usdToUk(realAfter):realAfter);
     const pPlan=sum(e=>e.plan==="전망"&&e.date===prev);
     const pReal=sum(e=>e.plan==="실적"&&e.date===prev);
     const tPlan=sum(e=>e.plan==="전망"&&e.date===D);
@@ -648,7 +654,7 @@ function gapjiHtml(D,region){
       <div class="kpi"><div class="lbl">금일 지출(계획,USD)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
       <div class="kpi"><div class="lbl">금일 예상 해외시재</div><div class="val num">${fmt(tb)}<span class="sub"> ≈ ${fmt(usdToUk(tb))}억</span></div></div>
     </div>
-    <p class="note">적용환율 ${fmt(settings.fx)}원/USD. ‘국내 회입(시재 회수)’ 지출액은 국내 갑지의 ‘연결법인 시재 회입’에 환산되어 자동 반영됩니다.</p>`;
+    <p class="note">적용환율 ${fmt(settings.fx)}원/USD. ‘'26년 실적’은 억원(기초값+실적 환산), 그 외 열은 USD 기준입니다. ‘국내 회입(시재 회수)’ 지출액은 국내 갑지의 ‘연결법인 시재 회입’에 환산되어 자동 반영됩니다.</p>`;
   }else{
     const pv=balanceAsOf(g.prev,"actual"),tb=pv+inT.tPlan-outT.tPlan;
     sum=`<div class="g-sum">
@@ -663,7 +669,7 @@ function gapjiHtml(D,region){
     <div class="g-unit">(${unit})</div>
     <div style="overflow:auto"><table class="gapji">
     <thead>
-      <tr><th class="lft" rowspan="2">구분</th><th rowspan="2">'${yr}년 실적</th>
+      <tr><th class="lft" rowspan="2">구분</th><th rowspan="2">'${yr}년 실적${ov?"<br><span style='font-weight:400;font-size:10px'>(억원)</span>":""}</th>
         <th colspan="4">전일 계획/실적 (${pd}일)</th>
         <th colspan="2">금일 계획 (${dd}일)</th></tr>
       <tr><th>계획</th><th>실적</th><th>계획比</th><th>차이</th>
@@ -702,7 +708,7 @@ function renderYtdPanel(){
       return `<tr><td class="lft">${esc(l.label)}</td>
         <td style="text-align:right"><input class="g-ytd" data-r="${region}" data-l="${esc(l.label)}" style="width:110px;text-align:right" value="${v!=null?fmt(v):''}"></td></tr>`;
     }).join("");
-    return `<div><strong style="font-size:12.5px">${region}${region==='해외'?' (백만USD)':''}</strong>
+    return `<div><strong style="font-size:12.5px">${region} (억원)</strong>
       <table style="margin-top:4px"><tbody>${rows}</tbody></table></div>`;
   };
   $("#g-ytd-inputs").innerHTML=`<div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">${tbl("국내",GAPJI)}${tbl("해외",GAPJI_OV)}</div>`;
