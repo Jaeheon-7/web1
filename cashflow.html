@@ -471,8 +471,8 @@ function save(){localStorage.setItem(KEY_E,JSON.stringify(entries));
   localStorage.setItem(KEY_S,JSON.stringify(settings));}
 function isoToday(){const d=new Date();return d.toISOString().slice(0,10);}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
-function fmt(n){return (Math.round(n)).toLocaleString("ko-KR");}
-function parseNum(s){return Number(String(s).replace(/[^0-9.-]/g,""))||0;}
+function fmt(n){n=Math.round(n);return n<0?"△"+Math.abs(n).toLocaleString("ko-KR"):n.toLocaleString("ko-KR");}
+function parseNum(s){s=String(s);const neg=/[△▲-]/.test(s);const n=Number(s.replace(/[^0-9.]/g,""))||0;return neg?-n:n;}
 function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
 function signed(e){return e.type==="수금"?e.amount:-e.amount;}
 
@@ -661,7 +661,7 @@ function gapjiCalc(region,D){
 function gTot(rows){return rows.reduce((a,r)=>({ytd:a.ytd+r.ytd,pPlan:a.pPlan+r.pPlan,
   pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan}),{ytd:0,pPlan:0,pReal:0,tPlan:0});}
 function planVarHtml(plan,real){if(!plan&&!real)return "-";const d=real-plan;
-  return `<span class="${d<0?'out':d>0?'in':''}">${fmt(d)}</span>`;}
+  return `<span class="${d<0?'out':d>0?'in':''}">${d>0?"+"+fmt(d):fmt(d)}</span>`;}
 function gapjiHtml(D,region){
   region=region||"국내";
   const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
