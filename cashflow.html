@@ -255,6 +255,7 @@
     <div class="card">
       <h2>백업 · 복원</h2>
       <div class="flex">
+        <button class="btn" id="s-xlsx">엑셀(.xlsx) 내보내기</button>
         <button class="btn sec" id="s-export">CSV 내보내기</button>
         <label class="btn sec" style="cursor:pointer">CSV 불러오기(추가)
           <input type="file" id="s-import" accept=".csv" hidden></label>
@@ -527,6 +528,102 @@ $("#s-export").onclick=()=>{
   const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_"+isoToday()+".csv";a.click();
+};
+/* ----- xlsx (self-contained, no libraries) ----- */
+function crc32(buf){let crc=0xFFFFFFFF;
+  for(let i=0;i<buf.length;i++){crc^=buf[i];
+    for(let j=0;j<8;j++)crc=(crc>>>1)^(0xEDB88320&-(crc&1));}
+  return (crc^0xFFFFFFFF)>>>0;}
+function zipStore(files){
+  const chunks=[],central=[];let offset=0;
+  const u16=n=>[n&255,(n>>>8)&255],u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  const enc=new TextEncoder();
+  for(const f of files){
+    const nb=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const local=[].concat(u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),
+      u32(crc),u32(sz),u32(sz),u16(nb.length),u16(0));
+    chunks.push(new Uint8Array(local),nb,f.data);
+    central.push({crc,sz,nb,offset});
+    offset+=local.length+nb.length+sz;}
+  const cdStart=offset;let cdSize=0;
+  for(const c of central){
+    const h=[].concat(u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),
+      u32(c.crc),u32(c.sz),u32(c.sz),u16(c.nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(c.offset));
+    chunks.push(new Uint8Array(h),c.nb);cdSize+=h.length+c.nb.length;}
+  chunks.push(new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),
+    u16(central.length),u16(central.length),u32(cdSize),u32(cdStart),u16(0))));
+  return new Blob(chunks,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xmlEsc(s){return String(s??"").replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&apos;"}[c]));}
+function colRef(n){let s="";n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=(n-m-1)/26;}return s;}
+function sheetXml(rows){
+  let body="";
+  rows.forEach((row,ri)=>{let cells="";
+    row.forEach((v,ci)=>{const ref=colRef(ci)+(ri+1);
+      if(typeof v==="number"&&isFinite(v))cells+=`<c r="${ref}"><v>${v}</v></c>`;
+      else cells+=`<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;});
+    body+=`<row r="${ri+1}">${cells}</row>`;});
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+}
+function buildXlsx(sheets){
+  const enc=new TextEncoder(),files=[];
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`+
+    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`+
+    `<Default Extension="xml" ContentType="application/xml"/>`+
+    `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`+
+    sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")+`</Types>`;
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+    `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const wb=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`+
+    `<sheets>`+sheets.map((s,i)=>`<sheet name="${xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")+`</sheets></workbook>`;
+  const wbr=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+    sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")+`</Relationships>`;
+  files.push({name:"[Content_Types].xml",data:enc.encode(ct)});
+  files.push({name:"_rels/.rels",data:enc.encode(rels)});
+  files.push({name:"xl/workbook.xml",data:enc.encode(wb)});
+  files.push({name:"xl/_rels/workbook.xml.rels",data:enc.encode(wbr)});
+  sheets.forEach((s,i)=>files.push({name:`xl/worksheets/sheet${i+1}.xml`,data:enc.encode(sheetXml(s.rows))}));
+  return zipStore(files);
+}
+function xlsxSheets(){
+  const U="금액("+settings.unit+")";
+  // 1) 내역
+  const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+  const s1=[["일자","구분","상세구분","PJT","전망/실적",U,"메모"]]
+    .concat(sorted.map(e=>[e.date,e.type,e.category,e.project,e.plan,e.amount,e.memo]));
+  // 2) 일별 집계 (혼합 기준)
+  const today=isoToday();
+  const dates=[...new Set(entries.map(e=>e.date))].sort();
+  const s2=[["일자","수금","지출","순증감","누적 시재"]];
+  dates.forEach(d=>{
+    const de=entries.filter(e=>e.date===d&&includeEntry(e,"mixed",today));
+    const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+    const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+    s2.push([d,i,o,i-o,balanceAsOf(d,"mixed")]);
+  });
+  // 3) PJT별 수금
+  const ins=entries.filter(e=>e.type==="수금");
+  const pjts=[...new Set(ins.map(e=>e.project||"(미지정)"))];
+  const s3=[["PJT","전망","실적","달성률(%)"]];
+  pjts.map(p=>{
+    const es=ins.filter(e=>(e.project||"(미지정)")===p);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {p,plan,real};
+  }).sort((a,b)=>(b.plan+b.real)-(a.plan+a.real))
+    .forEach(r=>s3.push([r.p,r.plan,r.real,r.plan?Math.round(r.real/r.plan*100):""]));
+  return [{name:"내역",rows:s1},{name:"일별 집계",rows:s2},{name:"PJT별 수금",rows:s3}];
+}
+$("#s-xlsx").onclick=()=>{
+  if(!entries.length){alert("내보낼 데이터가 없습니다.");return;}
+  const blob=buildXlsx(xlsxSheets());
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_"+isoToday()+".xlsx";a.click();
 };
 $("#s-import").onchange=e=>{
   const f=e.target.files[0];if(!f)return;
