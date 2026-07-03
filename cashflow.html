@@ -84,11 +84,17 @@
   table.gapji td.lft,table.gapji th.lft{text-align:left}
   table.gapji tr.grp td{background:#f1f5fb;font-weight:800;text-align:left;color:#243b53}
   table.gapji tr.row-tot td{background:#eaf0e6;font-weight:800}
-  table.gapji td.memo{white-space:normal;color:#33445a;text-align:left;min-width:180px}
+  table.gapji td.memo{white-space:normal;color:#33445a;text-align:left;min-width:190px}
+  .g-edit{width:100%;border:none;background:transparent;font:inherit;color:inherit;padding:2px 3px;border-radius:4px}
+  .g-edit:hover{background:#eef3fb}
+  .g-edit:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1px #7ba7d4}
+  .g-edit.num{text-align:right;font-variant-numeric:tabular-nums}
+  .g-edit.lft{text-align:left}
   .g-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
   .g-sum .kpi .val{font-size:18px}
   @media print{
-    header,.tabs,#g-controls{display:none!important}
+    header,.tabs,#g-controls,#g-ytd-panel{display:none!important}
+    .g-edit{box-shadow:none!important;background:transparent!important}
     body{background:#fff}
     .wrap{max-width:none;padding:0;margin:0}
     .card{border:none;box-shadow:none;margin:0;padding:0}
@@ -120,6 +126,13 @@
       <h2>내역 입력 <small>한 건씩 추가하면 모든 화면에 자동 반영됩니다</small></h2>
       <div class="grid" style="grid-template-columns:1.1fr 1fr;align-items:start">
         <div class="grid" style="grid-template-columns:1fr 1fr">
+          <div style="grid-column:1/3">
+            <label>국내 / 해외</label>
+            <div class="seg" id="f-region">
+              <button type="button" data-v="국내" class="on-plan">국내</button>
+              <button type="button" data-v="해외">해외 (USD)</button>
+            </div>
+          </div>
           <div>
             <label>일자</label>
             <input type="date" id="f-date">
@@ -141,6 +154,7 @@
           <div>
             <label>금액 <span id="unit-lbl2" class="sub"></span></label>
             <input type="text" id="f-amount" inputmode="numeric" placeholder="예: 1,200">
+            <div id="fx-hint" class="note" style="display:none">해외는 USD(백만불)로 입력 → 갑지에 환율로 환산됩니다</div>
           </div>
           <div style="grid-column:1/3">
             <label>상세구분</label>
@@ -218,8 +232,18 @@
           <button class="btn sec sm" id="g-xlsx">엑셀로 저장</button>
         </div>
       </div>
+      <details id="g-ytd-panel" style="margin:2px 0 14px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fbfcfe">
+        <summary style="cursor:pointer;font-weight:700;font-size:13px">'26년 실적 기초값 입력 (기준일까지 누계) ▾</summary>
+        <div class="flex" style="margin:10px 0">
+          <label style="margin:0">기초 기준일</label>
+          <input type="date" id="g-ytd-date" style="width:auto">
+          <span class="note">이 날짜까지의 누계를 아래에 입력하면, 이후 실적은 자동으로 더해집니다.</span>
+        </div>
+        <div id="g-ytd-inputs" style="overflow:auto"></div>
+      </details>
       <div id="g-report"></div>
-      <div id="g-forecast" style="margin-top:24px"></div>
+      <div id="g-overseas" style="margin-top:26px"></div>
+      <div id="g-forecast" style="margin-top:26px"></div>
     </div>
   </section>
 
@@ -285,9 +309,21 @@
         <div>
           <label>금액 단위 (표시용)</label>
           <select id="s-unit">
-            <option>백만원</option><option>천원</option><option>원</option><option>억원</option>
+            <option>억원</option><option>백만원</option><option>천원</option><option>원</option>
           </select>
         </div>
+      </div>
+      <h2 style="margin-top:18px">해외 (USD) 설정</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;max-width:640px">
+        <div>
+          <label>적용 환율 (원/USD)</label>
+          <input type="text" id="s-fx" inputmode="numeric" placeholder="예: 1,350">
+        </div>
+        <div>
+          <label>해외 기초 시재 <span class="sub">(백만USD)</span></label>
+          <input type="text" id="s-ovbal" inputmode="numeric" placeholder="예: 200">
+        </div>
+        <div style="display:flex;align-items:flex-end"><span class="note">해외 입력은 백만USD, 갑지 환산은 억원 기준(=USD×환율÷100)</span></div>
       </div>
       <button class="btn" id="s-save" style="margin-top:14px">저장</button>
     </div>
@@ -363,10 +399,53 @@ const GAPJI={
     {label:"배당 지출",cats:["배당 지출"]},
   ]
 };
+// 해외 (USD 기준)
+const CATS_OV={
+  수금:["단독 입금","JV입금","기타 수금"],
+  지출:["현장 전도금","업체 대금 지급","JV출금","국내 회입(시재 회수)"]
+};
+const GAPJI_OV={
+  입금:[
+    {label:"단독 입금",cats:["단독 입금"]},
+    {label:"JV입금",cats:["JV입금"]},
+    {label:"기타 수금",cats:["기타 수금"]},
+  ],
+  지출:[
+    {label:"현장 전도금",cats:["현장 전도금"]},
+    {label:"업체 대금 지급",cats:["업체 대금 지급"]},
+    {label:"JV출금",cats:["JV출금"]},
+    {label:"국내 회입(시재 회수)",cats:["국내 회입(시재 회수)"]},
+  ]
+};
+const REPAT="국내 회입(시재 회수)"; // 해외 시재 회수 → 국내 연결법인 시재 회입
 
+const KEY_M="jsuji_manual_v1";
 let entries=load(KEY_E,[]);
-let settings=load(KEY_S,{baseDate:isoToday(),baseBalance:0,unit:"백만원"});
-let form={type:"수금",plan:"전망"};
+let settings=load(KEY_S,{baseDate:isoToday(),baseBalance:0,unit:"억원"});
+// 신규 설정 기본값 보정
+if(settings.fx==null)settings.fx=1350;
+if(settings.ovBaseBalance==null)settings.ovBaseBalance=0;
+if(settings.ytdBaseDate==null)settings.ytdBaseDate="2026-07-01";
+if(!settings.ytdBase)settings.ytdBase={국내:{},해외:{}};
+if(!settings.ytdBase.국내)settings.ytdBase.국내={};
+if(!settings.ytdBase.해외)settings.ytdBase.해외={};
+// 기존 항목 region 보정
+entries.forEach(e=>{if(!e.region)e.region="국내";});
+let manual=load(KEY_M,{});         // manual[region][date]={diff:{label:num},note:{label:str}}
+let form={region:"국내",type:"수금",plan:"전망"};
+function mget(region,date){manual[region]=manual[region]||{};
+  manual[region][date]=manual[region][date]||{diff:{},note:{}};
+  const m=manual[region][date];m.diff=m.diff||{};m.note=m.note||{};return m;}
+function saveM(){localStorage.setItem(KEY_M,JSON.stringify(manual));}
+function usdToUk(usdM){return usdM*(Number(settings.fx)||0)/100;} // 백만USD → 억원
+/* 국내 유효내역 = 국내 입력 + (해외 시재회수 → 연결법인 시재 회입 환산분) */
+function DOM(){
+  const syn=entries.filter(e=>e.region==="해외"&&e.category===REPAT).map(e=>({
+    id:e.id+"_syn",date:e.date,type:"수금",category:"연결법인 시재 회입",project:"",
+    plan:e.plan,amount:usdToUk(e.amount),memo:"해외 시재 회입 환산",region:"국내",_syn:true}));
+  return entries.filter(e=>e.region!=="해외").concat(syn);
+}
+function OV(){return entries.filter(e=>e.region==="해외");}
 
 function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
 function save(){localStorage.setItem(KEY_E,JSON.stringify(entries));
@@ -399,11 +478,16 @@ function segBind(sel,key,onIn,onOut){
   });
 }
 segBind("#f-type","type");segBind("#f-plan","plan");
+$$("#f-region button").forEach(b=>b.onclick=()=>{form.region=b.dataset.v;syncCat();});
 function syncCat(){
-  const isIn=form.type==="수금";
-  $("#f-cat").innerHTML=CATS[form.type].map(c=>`<option>${c}</option>`).join("");
-  $("#f-pjt-box").style.display=isIn?"":"none";
-  // fix seg colors for type
+  const isIn=form.type==="수금",ov=form.region==="해외";
+  const cats=(ov?CATS_OV:CATS)[form.type];
+  $("#f-cat").innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
+  $("#f-pjt-box").style.display=(isIn&&!ov)?"":"none";
+  $("#fx-hint").style.display=ov?"":"none";
+  $("#unit-lbl2").textContent=ov?"(백만USD)":"("+settings.unit+")";
+  $("#f-amount").placeholder=ov?"예: 20 (백만불)":"예: 1,200";
+  $$("#f-region button").forEach(b=>b.className=b.dataset.v===form.region?"on-plan":"");
   $$("#f-type button").forEach(b=>b.className=b.dataset.v===form.type?(form.type==="수금"?"on-in":"on-out"):"");
 }
 function refreshPjtList(){
@@ -413,8 +497,8 @@ function refreshPjtList(){
 $("#f-add").onclick=()=>{
   const amt=parseNum($("#f-amount").value);
   if(!amt){$("#f-amount").focus();return;}
-  entries.push({id:uid(),date:$("#f-date").value||isoToday(),type:form.type,
-    category:$("#f-cat").value,project:form.type==="수금"?$("#f-pjt").value.trim():"",
+  entries.push({id:uid(),date:$("#f-date").value||isoToday(),region:form.region,type:form.type,
+    category:$("#f-cat").value,project:(form.type==="수금"&&form.region==="국내")?$("#f-pjt").value.trim():"",
     plan:form.plan,amount:amt,memo:$("#f-memo").value.trim()});
   save();$("#f-amount").value="";$("#f-memo").value="";
   refreshPjtList();renderRecent();
@@ -430,11 +514,11 @@ function renderRecent(){
     `<thead><tr><th class="lft">일자</th><th class="lft">내역</th><th>금액</th><th></th></tr></thead><tbody>`+
     rows.map(e=>`<tr>
       <td class="lft mut">${e.date.slice(5)}</td>
-      <td class="lft"><span class="pill ${e.type==='수금'?'in':'out'}">${e.type}</span>
+      <td class="lft">${e.region==="해외"?`<span class="pill" style="background:#eef;color:#437">해외</span> `:""}<span class="pill ${e.type==='수금'?'in':'out'}">${e.type}</span>
         <span class="pill ${e.plan==='전망'?'plan':'real'}">${e.plan}</span>
         ${esc(e.category)}${e.project?` · <span class="mut">${esc(e.project)}</span>`:""}
         ${e.memo?`<div class="sub">${esc(e.memo)}</div>`:""}</td>
-      <td class="num ${e.type==='수금'?'in':'out'}">${fmt(e.amount)}</td>
+      <td class="num ${e.type==='수금'?'in':'out'}">${fmt(e.amount)}${e.region==="해외"?'<span class="sub"> $</span>':''}</td>
       <td><button class="btn danger sm" data-del="${e.id}">×</button></td></tr>`).join("")+`</tbody>`;
   $$("#recent-tbl [data-del]").forEach(b=>b.onclick=()=>{
     entries=entries.filter(e=>e.id!==b.dataset.del);save();renderRecent();refreshPjtList();});
@@ -446,10 +530,19 @@ function includeEntry(e,mode,today){
   if(mode==="forecast")return e.plan==="전망";
   return e.plan==="실적" ? true : e.date>=today;   // mixed
 }
-// closing balance up to & including date D
+// closing balance up to & including date D (국내 KRW, 해외 회입 환산 포함)
 function balanceAsOf(D,mode){
   const today=isoToday();let b=settings.baseBalance;
-  for(const e of entries){
+  for(const e of DOM()){
+    if(e.date<settings.baseDate||e.date>D)continue;
+    if(includeEntry(e,mode,today))b+=signed(e);
+  }
+  return b;
+}
+// 해외 시재 (USD, 백만불)
+function ovBalanceAsOf(D,mode){
+  const today=isoToday();let b=Number(settings.ovBaseBalance)||0;
+  for(const e of OV()){
     if(e.date<settings.baseDate||e.date>D)continue;
     if(includeEntry(e,mode,today))b+=signed(e);
   }
@@ -460,8 +553,9 @@ function balanceAsOf(D,mode){
 $("#board-date").value=isoToday();
 $("#board-date").onchange=renderBoard;$("#board-mode").onchange=renderBoard;
 function boardTable(type,date){
+  const dom=DOM();
   const rows=CATS[type].map(cat=>{
-    const es=entries.filter(e=>e.type===type&&e.category===cat&&e.date===date);
+    const es=dom.filter(e=>e.type===type&&e.category===cat&&e.date===date);
     const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
     const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
     return {cat,plan,real};
@@ -482,7 +576,7 @@ function renderBoard(){
   $("#board-in").innerHTML=bi.html;$("#board-out").innerHTML=bo.html;
   // day figures per mode
   const today=isoToday();
-  const dayEntries=entries.filter(e=>e.date===date&&includeEntry(e,mode,today));
+  const dayEntries=DOM().filter(e=>e.date===date&&includeEntry(e,mode,today));
   const inSum=dayEntries.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
   const outSum=dayEntries.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
   const prev=balanceAsOf(prevDay(date),mode);
@@ -496,46 +590,77 @@ function prevDay(d){const x=new Date(d+"T00:00:00");x.setDate(x.getDate()-1);ret
 /* ---------- 갑지 (일일 보고) ---------- */
 $("#g-date").value=isoToday();
 $("#g-date").onchange=renderGapji;
-function gapjiCalc(D){
-  const prev=prevDay(D),yStart=D.slice(0,4)+"-01-01";
-  const line=(type,cats)=>{
+function prevBizDay(iso){let d=new Date(iso+"T12:00:00");
+  do{d.setDate(d.getDate()-1);}while(d.getDay()===0||d.getDay()===6);return fmtDate(d);}
+function gapjiCalc(region,D){
+  const data=region==="해외"?OV():DOM();
+  const defs=region==="해외"?GAPJI_OV:GAPJI;
+  const prev=prevBizDay(D),ybd=settings.ytdBaseDate,base=settings.ytdBase[region]||{},m=mget(region,D);
+  const line=(type,cats,label)=>{
     const hit=e=>e.type===type&&cats.includes(e.category);
-    const sum=f=>entries.filter(e=>hit(e)&&f(e)).reduce((s,e)=>s+e.amount,0);
-    const ytd=sum(e=>e.plan==="실적"&&e.date>=yStart&&e.date<=D);
+    const sum=f=>data.filter(e=>hit(e)&&f(e)).reduce((s,e)=>s+e.amount,0);
+    const ytd=(Number(base[label])||0)+sum(e=>e.plan==="실적"&&e.date>ybd&&e.date<=D);
     const pPlan=sum(e=>e.plan==="전망"&&e.date===prev);
     const pReal=sum(e=>e.plan==="실적"&&e.date===prev);
     const tPlan=sum(e=>e.plan==="전망"&&e.date===D);
-    const memos=[...new Set(entries.filter(e=>hit(e)&&e.plan==="전망"&&e.date===D&&e.memo).map(e=>e.memo))];
-    return {ytd,pPlan,pReal,tPlan,memo:memos.join(", ")};
+    let auto="";
+    if(type==="수금"){
+      auto=data.filter(e=>hit(e)&&e.plan==="전망"&&e.date===D).sort((a,b)=>b.amount-a.amount)
+        .slice(0,2).map(e=>`${e.memo||e.project||label}_${fmt(e.amount)}`).join(", ");
+    }
+    const note=(label in m.note)?m.note[label]:auto;
+    const diff=(label in m.diff)?Number(m.diff[label]):(pReal-pPlan);
+    return {label,ytd,pPlan,pReal,tPlan,diff,note};
   };
-  const build=(blk,type)=>blk.map(l=>({label:l.label,...line(type,l.cats)}));
-  return {입금:build(GAPJI.입금,"수금"),지출:build(GAPJI.지출,"지출"),prev,D};
+  const build=(blk,type)=>blk.map(l=>line(type,l.cats,l.label));
+  return {입금:build(defs.입금,"수금"),지출:build(defs.지출,"지출"),prev,D,region};
 }
 function gTot(rows){return rows.reduce((a,r)=>({ytd:a.ytd+r.ytd,pPlan:a.pPlan+r.pPlan,
-  pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan}),{ytd:0,pPlan:0,pReal:0,tPlan:0});}
+  pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan,diff:a.diff+r.diff}),{ytd:0,pPlan:0,pReal:0,tPlan:0,diff:0});}
 function ratioTxt(plan,real){if(!plan)return real?"신규":"-";return Math.round(real/plan*100)+"%";}
-function gapjiHtml(D){
-  const g=gapjiCalc(D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10);
-  const rowHtml=r=>{const diff=r.pReal-r.pPlan;
-    return `<tr><td class="lft">${esc(r.label)}</td>
+function gapjiHtml(D,region){
+  region=region||"국내";
+  const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
+  const eD=r=>`<input class="g-edit num" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" value="${r.diff?fmt(r.diff):''}">`;
+  const eN=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="note" data-l="${esc(r.label)}" value="${esc(r.note)}">`;
+  const rowHtml=r=>`<tr><td class="lft">${esc(r.label)}</td>
       <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
       <td class="num mut">${r.pPlan?fmt(r.pPlan):"-"}</td>
       <td class="num">${r.pReal?fmt(r.pReal):"-"}</td>
       <td class="num">${ratioTxt(r.pPlan,r.pReal)}</td>
-      <td class="num ${diff<0?'out':diff>0?'in':''}">${diff?fmt(diff):"-"}</td>
+      <td class="num ${r.diff<0?'out':r.diff>0?'in':''}">${eD(r)}</td>
       <td class="num">${r.tPlan?fmt(r.tPlan):"-"}</td>
-      <td class="memo">${esc(r.memo)}</td></tr>`;};
-  const totHtml=(label,t)=>{const diff=t.pReal-t.pPlan;
-    return `<tr class="row-tot"><td class="lft">${label}</td>
+      <td class="memo">${eN(r)}</td></tr>`;
+  const totHtml=(label,t)=>`<tr class="row-tot"><td class="lft">${label}</td>
       <td class="num">${fmt(t.ytd)}</td><td class="num">${fmt(t.pPlan)}</td>
       <td class="num">${fmt(t.pReal)}</td><td class="num">${ratioTxt(t.pPlan,t.pReal)}</td>
-      <td class="num ${diff<0?'out':diff>0?'in':''}">${fmt(diff)}</td>
-      <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;};
+      <td class="num ${t.diff<0?'out':t.diff>0?'in':''}">${fmt(t.diff)}</td>
+      <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;
   const inT=gTot(g.입금),outT=gTot(g.지출);
-  const prevBal=balanceAsOf(g.prev,"actual");
-  const todayBal=prevBal+inT.tPlan-outT.tPlan;
-  return `<div class="g-title"><h3>일일 자금수지 현황</h3><div class="d">${D}</div></div>
-    <div class="g-unit">(단위: ${esc(settings.unit)})</div>
+  const title=ov?"해외 자금수지 현황":"일일 자금수지 현황";
+  const unit=ov?"백만USD · 환산 억원 = USD×환율÷100":"단위: "+esc(settings.unit);
+  let sum;
+  if(ov){
+    const pv=ovBalanceAsOf(g.prev,"actual"),tb=pv+inT.tPlan-outT.tPlan;
+    sum=`<div class="g-sum">
+      <div class="kpi"><div class="lbl">전일 해외시재(USD)</div><div class="val num">${fmt(pv)}</div></div>
+      <div class="kpi"><div class="lbl">금일 입금(계획,USD)</div><div class="val num in">${fmt(inT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 지출(계획,USD)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 예상 해외시재</div><div class="val num">${fmt(tb)}<span class="sub"> ≈ ${fmt(usdToUk(tb))}억</span></div></div>
+    </div>
+    <p class="note">적용환율 ${fmt(settings.fx)}원/USD. ‘국내 회입(시재 회수)’ 지출액은 국내 갑지의 ‘연결법인 시재 회입’에 환산되어 자동 반영됩니다.</p>`;
+  }else{
+    const pv=balanceAsOf(g.prev,"actual"),tb=pv+inT.tPlan-outT.tPlan;
+    sum=`<div class="g-sum">
+      <div class="kpi"><div class="lbl">전일 시재(실적)</div><div class="val num">${fmt(pv)}</div></div>
+      <div class="kpi"><div class="lbl">금일 입금(계획)</div><div class="val num in">${fmt(inT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 지출(계획)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 예상 시재</div><div class="val num">${fmt(tb)}</div></div>
+    </div>
+    <p class="note">전일=직전 영업일(${g.prev}). 계획=전망, 실적=실적. ‘차이’·‘내용’ 칸은 클릭해 수기 수정할 수 있습니다(입금 내용은 큰 건 2개 자동).</p>`;
+  }
+  return `<div class="g-title"><h3>${title}</h3><div class="d">${D}${ov?" · 해외":""}</div></div>
+    <div class="g-unit">(${unit})</div>
     <div style="overflow:auto"><table class="gapji">
     <thead>
       <tr><th class="lft" rowspan="2">구분</th><th rowspan="2">'${yr}년 실적</th>
@@ -544,21 +669,45 @@ function gapjiHtml(D){
       <tr><th>계획</th><th>실적</th><th>계획比</th><th>차이</th>
         <th>계획</th><th class="lft">내용</th></tr>
     </thead><tbody>
-    <tr class="grp"><td colspan="8">입금</td></tr>
+    <tr class="grp"><td colspan="8">입금${ov?" (USD)":""}</td></tr>
     ${g.입금.map(rowHtml).join("")}
     ${totHtml("입금 계",inT)}
-    <tr class="grp"><td colspan="8">지출</td></tr>
+    <tr class="grp"><td colspan="8">지출${ov?" (USD)":""}</td></tr>
     ${g.지출.map(rowHtml).join("")}
     ${totHtml("지출 계",outT)}
     </tbody></table></div>
-    <div class="g-sum">
-      <div class="kpi"><div class="lbl">전일 시재(실적)</div><div class="val num">${fmt(prevBal)}</div></div>
-      <div class="kpi"><div class="lbl">금일 입금(계획)</div><div class="val num in">${fmt(inT.tPlan)}</div></div>
-      <div class="kpi"><div class="lbl">금일 지출(계획)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
-      <div class="kpi"><div class="lbl">금일 예상 시재</div><div class="val num">${fmt(todayBal)}</div></div>
-    </div>
-    <p class="note">계획=전망, 실적=실적. ‘실적’ 열의 연간 값은 연초부터 선택일까지 실적 누계입니다.</p>`;
+    ${sum}`;
 }
+/* 갑지 수기 입력(차이·내용) 저장 */
+document.addEventListener("change",ev=>{
+  const el=ev.target;if(!el.classList||!el.classList.contains("g-edit"))return;
+  const m=mget(el.dataset.r,el.dataset.d),label=el.dataset.l;
+  if(el.dataset.k==="diff"){const v=el.value.trim();
+    if(v==="")delete m.diff[label];else m.diff[label]=parseNum(v);}
+  else m.note[label]=el.value;
+  saveM();setTimeout(renderReports,0);
+});
+/* '26년 실적 기초값 입력 */
+document.addEventListener("change",ev=>{
+  const el=ev.target;if(!el.classList||!el.classList.contains("g-ytd"))return;
+  const r=el.dataset.r,label=el.dataset.l,v=el.value.trim();
+  settings.ytdBase[r]=settings.ytdBase[r]||{};
+  if(v==="")delete settings.ytdBase[r][label];else settings.ytdBase[r][label]=parseNum(v);
+  save();setTimeout(renderReports,0);
+});
+function renderYtdPanel(){
+  $("#g-ytd-date").value=settings.ytdBaseDate;
+  const tbl=(region,defs)=>{
+    const rows=[...defs.입금,...defs.지출].map(l=>{const v=settings.ytdBase[region][l.label];
+      return `<tr><td class="lft">${esc(l.label)}</td>
+        <td style="text-align:right"><input class="g-ytd" data-r="${region}" data-l="${esc(l.label)}" style="width:110px;text-align:right" value="${v!=null?fmt(v):''}"></td></tr>`;
+    }).join("");
+    return `<div><strong style="font-size:12.5px">${region}${region==='해외'?' (백만USD)':''}</strong>
+      <table style="margin-top:4px"><tbody>${rows}</tbody></table></div>`;
+  };
+  $("#g-ytd-inputs").innerHTML=`<div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">${tbl("국내",GAPJI)}${tbl("해외",GAPJI_OV)}</div>`;
+}
+$("#g-ytd-date").onchange=()=>{settings.ytdBaseDate=$("#g-ytd-date").value;save();renderGapji();};
 /* 향후 N영업일 전망 (주말 제외) */
 function fmtDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function bizDays(startISO,n){
@@ -571,8 +720,9 @@ function forecastCalc(D,n){
   const days=bizDays(D,n),today=isoToday();
   const startBal=balanceAsOf(prevDay(days[0].iso),"mixed");
   let ti=0,to=0,min=Infinity,minDay="";
+  const dom=DOM();
   const rows=days.map(x=>{
-    const de=entries.filter(e=>e.date===x.iso&&includeEntry(e,"mixed",today));
+    const de=dom.filter(e=>e.date===x.iso&&includeEntry(e,"mixed",today));
     const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
     const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
     const bal=balanceAsOf(x.iso,"mixed");
@@ -619,11 +769,13 @@ function forecastHtml(D){
         <td class="num out">${fmt(f.to)}</td><td class="num">${fmt(f.ti-f.to)}</td>
         <td class="num">${fmt(f.rows.length?f.rows[f.rows.length-1].bal:f.startBal)}</td></tr></tbody></table></div>`;
 }
-function renderGapji(){
+function renderReports(){
   const D=$("#g-date").value||isoToday();
-  $("#g-report").innerHTML=gapjiHtml(D);
+  $("#g-report").innerHTML=gapjiHtml(D,"국내");
+  $("#g-overseas").innerHTML=gapjiHtml(D,"해외");
   $("#g-forecast").innerHTML=forecastHtml(D);
 }
+function renderGapji(){renderReports();renderYtdPanel();}
 $("#g-print").onclick=()=>window.print();
 function forecastRows(D){
   const f=forecastCalc(D,10),rows=[["향후 10영업일 자금 전망 (기준일 "+D+")","","","",""]];
@@ -633,25 +785,28 @@ function forecastRows(D){
   rows.push(["합계","",f.ti,f.to,f.ti-f.to,f.rows.length?f.rows[f.rows.length-1].bal:f.startBal]);
   return rows;
 }
-function gapjiRows(D){
-  const g=gapjiCalc(D),rows=[];
-  rows.push(["일일 자금수지 현황",D,"","","","","",""]);
+function gapjiRows(D,region){
+  region=region||"국내";const g=gapjiCalc(region,D),ov=region==="해외",rows=[];
+  rows.push([(ov?"해외 ":"")+"자금수지 현황"+(ov?"(USD)":""),D,"","","","","",""]);
   rows.push(["구분","'"+D.slice(2,4)+"년 실적","전일 계획","전일 실적","계획比(%)","차이","금일 계획","내용"]);
   const push=(blk)=>blk.forEach(r=>rows.push([r.label,r.ytd,r.pPlan,r.pReal,
-    r.pPlan?Math.round(r.pReal/r.pPlan*100):"",r.pReal-r.pPlan,r.tPlan,r.memo]));
+    r.pPlan?Math.round(r.pReal/r.pPlan*100):"",r.diff,r.tPlan,r.note]));
   const tot=(label,t)=>rows.push([label,t.ytd,t.pPlan,t.pReal,
-    t.pPlan?Math.round(t.pReal/t.pPlan*100):"",t.pReal-t.pPlan,t.tPlan,""]);
+    t.pPlan?Math.round(t.pReal/t.pPlan*100):"",t.diff,t.tPlan,""]);
   rows.push(["[입금]","","","","","","",""]);push(g.입금);tot("입금 계",gTot(g.입금));
   rows.push(["[지출]","","","","","","",""]);push(g.지출);tot("지출 계",gTot(g.지출));
-  const inT=gTot(g.입금),outT=gTot(g.지출),prevBal=balanceAsOf(g.prev,"actual");
+  const inT=gTot(g.입금),outT=gTot(g.지출);
+  const pv=ov?ovBalanceAsOf(g.prev,"actual"):balanceAsOf(g.prev,"actual");
   rows.push(["","","","","","","",""]);
-  rows.push(["전일 시재(실적)",prevBal,"","","","","",""]);
-  rows.push(["금일 예상 시재",prevBal+inT.tPlan-outT.tPlan,"","","","","",""]);
+  rows.push([ov?"전일 해외시재":"전일 시재(실적)",pv,"","","","","",""]);
+  rows.push([ov?"금일 예상 해외시재":"금일 예상 시재",pv+inT.tPlan-outT.tPlan,"","","","","",""]);
   return rows;
 }
 $("#g-xlsx").onclick=()=>{
   const D=$("#g-date").value||isoToday();
-  const blob=buildXlsx([{name:"일일갑지 "+D.slice(5),rows:gapjiRows(D)},
+  const blob=buildXlsx([
+    {name:"국내갑지 "+D.slice(5),rows:gapjiRows(D,"국내")},
+    {name:"해외갑지 "+D.slice(5),rows:gapjiRows(D,"해외")},
     {name:"10영업일 전망",rows:forecastRows(D)}]);
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_갑지_"+D+".xlsx";a.click();
@@ -663,10 +818,10 @@ $("#trend-month").onchange=renderTrend;$("#trend-mode").onchange=renderTrend;
 function daysInMonth(ym){const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();}
 function renderTrend(){
   const ym=$("#trend-month").value||isoToday().slice(0,7),mode=$("#trend-mode").value,today=isoToday();
-  const nd=daysInMonth(ym);const rows=[];let monIn=0,monOut=0;
+  const nd=daysInMonth(ym);const rows=[];let monIn=0,monOut=0;const dom=DOM();
   for(let d=1;d<=nd;d++){
     const date=`${ym}-${String(d).padStart(2,"0")}`;
-    const de=entries.filter(e=>e.date===date&&includeEntry(e,mode,today));
+    const de=dom.filter(e=>e.date===date&&includeEntry(e,mode,today));
     const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
     const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
     monIn+=i;monOut+=o;
@@ -716,7 +871,7 @@ $("#pjt-month").onchange=renderPjt;
 $("#pjt-all").onclick=()=>{$("#pjt-month").value="";renderPjt();};
 function renderPjt(){
   const ym=$("#pjt-month").value;
-  const scope=entries.filter(e=>!ym||e.date.slice(0,7)===ym);
+  const scope=entries.filter(e=>e.region!=="해외"&&(!ym||e.date.slice(0,7)===ym));
   // PJT table (수금 only)
   const ins=scope.filter(e=>e.type==="수금");
   const pjts=[...new Set(ins.map(e=>e.project||"(미지정)"))];
@@ -761,27 +916,31 @@ function catTableHtml(scope,type){
 function fillSettings(){
   $("#s-basedate").value=settings.baseDate;$("#s-basebal").value=fmt(settings.baseBalance);
   $("#s-unit").value=settings.unit;
+  $("#s-fx").value=fmt(settings.fx);$("#s-ovbal").value=fmt(settings.ovBaseBalance);
   $("#unit-lbl2").textContent="("+settings.unit+")";
 }
 $("#s-save").onclick=()=>{
   settings.baseDate=$("#s-basedate").value||isoToday();
   settings.baseBalance=parseNum($("#s-basebal").value);
-  settings.unit=$("#s-unit").value;save();fillSettings();
+  settings.unit=$("#s-unit").value;
+  settings.fx=parseNum($("#s-fx").value)||1350;
+  settings.ovBaseBalance=parseNum($("#s-ovbal").value);
+  save();fillSettings();
   alert("저장했습니다.");
 };
 $("#s-export").onclick=()=>{
-  const head=["일자","구분","상세구분","PJT","전망실적","금액","메모"];
+  const head=["일자","국내외","구분","상세구분","PJT","전망실적","금액","메모"];
   const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
   const csv=[head.join(",")].concat(entries.map(e=>
-    [e.date,e.type,e.category,e.project,e.plan,e.amount,e.memo].map(q).join(","))).join("\r\n");
+    [e.date,e.region||"국내",e.type,e.category,e.project,e.plan,e.amount,e.memo].map(q).join(","))).join("\r\n");
   const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_"+isoToday()+".csv";a.click();
 };
 /* ----- full backup: data file save / restore (.json) ----- */
 $("#s-backup").onclick=()=>{
-  const snap={app:"자금수지 모판",version:1,exportedAt:new Date().toISOString(),
-    settings,entries};
+  const snap={app:"자금수지 모판",version:2,exportedAt:new Date().toISOString(),
+    settings,entries,manual};
   const blob=new Blob([JSON.stringify(snap,null,2)],{type:"application/json"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_데이터_"+isoToday()+".json";a.click();
@@ -797,15 +956,19 @@ $("#s-restore").onchange=e=>{
     if(entries.length && !confirm(`현재 데이터(${entries.length}건)를 지우고 파일의 데이터(${cnt}건)로 교체할까요?`)){return;}
     // sanitize entries
     entries=snap.entries.filter(x=>x&&x.date).map(x=>({
-      id:x.id||uid(),date:String(x.date),type:x.type==="지출"?"지출":"수금",
+      id:x.id||uid(),date:String(x.date),region:x.region==="해외"?"해외":"국내",
+      type:x.type==="지출"?"지출":"수금",
       category:String(x.category||"기타"),project:String(x.project||""),
       plan:x.plan==="실적"?"실적":"전망",amount:Number(x.amount)||0,memo:String(x.memo||"")}));
     if(snap.settings&&typeof snap.settings==="object"){
-      settings={baseDate:snap.settings.baseDate||isoToday(),
-        baseBalance:Number(snap.settings.baseBalance)||0,
-        unit:snap.settings.unit||"백만원"};
+      const s=snap.settings;
+      settings={baseDate:s.baseDate||isoToday(),baseBalance:Number(s.baseBalance)||0,
+        unit:s.unit||"억원",fx:Number(s.fx)||1350,ovBaseBalance:Number(s.ovBaseBalance)||0,
+        ytdBaseDate:s.ytdBaseDate||"2026-07-01",
+        ytdBase:(s.ytdBase&&typeof s.ytdBase==="object")?{국내:s.ytdBase.국내||{},해외:s.ytdBase.해외||{}}:{국내:{},해외:{}}};
     }
-    save();refreshPjtList();renderRecent();fillSettings();
+    manual=(snap.manual&&typeof snap.manual==="object")?snap.manual:{};
+    save();saveM();refreshPjtList();renderRecent();fillSettings();renderYtdPanel();
     alert(`복원 완료: ${entries.length}건을 불러왔습니다.`);
   };
   r.readAsText(f);e.target.value="";
@@ -876,20 +1039,20 @@ function xlsxSheets(){
   const U="금액("+settings.unit+")";
   // 1) 내역
   const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
-  const s1=[["일자","구분","상세구분","PJT","전망/실적",U,"메모"]]
-    .concat(sorted.map(e=>[e.date,e.type,e.category,e.project,e.plan,e.amount,e.memo]));
-  // 2) 일별 집계 (혼합 기준)
-  const today=isoToday();
-  const dates=[...new Set(entries.map(e=>e.date))].sort();
+  const s1=[["일자","국내외","구분","상세구분","PJT","전망/실적",U+"/USD","메모"]]
+    .concat(sorted.map(e=>[e.date,e.region||"국내",e.type,e.category,e.project,e.plan,e.amount,e.memo]));
+  // 2) 일별 집계 (국내, 혼합 기준)
+  const today=isoToday(),dom=DOM();
+  const dates=[...new Set(dom.map(e=>e.date))].sort();
   const s2=[["일자","수금","지출","순증감","누적 시재"]];
   dates.forEach(d=>{
-    const de=entries.filter(e=>e.date===d&&includeEntry(e,"mixed",today));
+    const de=dom.filter(e=>e.date===d&&includeEntry(e,"mixed",today));
     const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
     const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
     s2.push([d,i,o,i-o,balanceAsOf(d,"mixed")]);
   });
-  // 3) PJT별 수금
-  const ins=entries.filter(e=>e.type==="수금");
+  // 3) PJT별 수금 (국내)
+  const ins=entries.filter(e=>e.region!=="해외"&&e.type==="수금");
   const pjts=[...new Set(ins.map(e=>e.project||"(미지정)"))];
   const s3=[["PJT","전망","실적","달성률(%)"]];
   pjts.map(p=>{
@@ -924,11 +1087,15 @@ function parseCsv(text){
       else if(c!=="\r")field+=c;}
     i++;}
   if(field.length||row.length){row.push(field);rows.push(row);}
-  const out=[];
-  for(let k=1;k<rows.length;k++){const r=rows[k];if(r.length<6||!r[0])continue;
-    out.push({id:uid(),date:r[0].trim(),type:r[1].trim()==="지출"?"지출":"수금",
-      category:r[2].trim(),project:r[3].trim(),plan:r[4].trim()==="실적"?"실적":"전망",
-      amount:parseNum(r[5]),memo:(r[6]||"").trim()});}
+  const out=[],hasR=(rows[0]||[])[1]&&String(rows[0][1]).includes("국내");
+  for(let k=1;k<rows.length;k++){const r=rows[k];if(!r[0])continue;
+    const c=hasR?{reg:r[1],t:r[2],cat:r[3],pjt:r[4],pl:r[5],amt:r[6],memo:r[7]}
+                :{reg:"국내",t:r[1],cat:r[2],pjt:r[3],pl:r[4],amt:r[5],memo:r[6]};
+    if(c.t==null)continue;
+    out.push({id:uid(),date:r[0].trim(),region:String(c.reg).trim()==="해외"?"해외":"국내",
+      type:String(c.t).trim()==="지출"?"지출":"수금",category:String(c.cat||"").trim(),
+      project:String(c.pjt||"").trim(),plan:String(c.pl).trim()==="실적"?"실적":"전망",
+      amount:parseNum(c.amt),memo:String(c.memo||"").trim()});}
   return out;
 }
 $("#s-clear").onclick=()=>{if(confirm("모든 데이터를 삭제할까요? 되돌릴 수 없습니다."))
@@ -936,24 +1103,32 @@ $("#s-clear").onclick=()=>{if(confirm("모든 데이터를 삭제할까요? 되�
 $("#s-sample").onclick=()=>{
   const t=isoToday(),ym=t.slice(0,7);const d=n=>`${ym}-${String(n).padStart(2,"0")}`;
   const s=[
-    [d(2),"수금","공사수입(기성)","A현장","실적",1200,"2차 기성"],
-    [d(2),"지출","현장 대금지급","","실적",800,""],
-    [d(3),"수금","공사수입(분양금)","B현장","실적",3000,"중도금"],
-    [d(3),"수금","받을어음 만기","A현장","전망",500,""],
-    [d(3),"지출","본사 대금지급","","실적",450,""],
-    [d(5),"수금","사업비 차입","C현장","전망",5000,"PF 인출"],
-    [d(5),"지출","사업비 대출 이자","","전망",120,""],
-    [d(10),"지출","법인세","","전망",2200,"중간예납"],
-    [d(15),"수금","대여금 회입","","전망",800,""],
-    [d(20),"지출","지급어음 만기","","전망",1500,""],
+    ["국내",d(2),"수금","공사수입(기성)","A현장","실적",1200,"2차 기성"],
+    ["국내",d(2),"지출","현장 대금지급","","실적",800,""],
+    ["국내",d(3),"수금","공사수입(분양금)","B현장","실적",3000,"방화6 중도금"],
+    ["국내",d(3),"수금","받을어음 만기","A현장","전망",500,""],
+    ["국내",d(3),"지출","본사 대금지급","","실적",450,""],
+    ["국내",d(5),"수금","사업비 차입","C현장","전망",5000,"PF 인출"],
+    ["국내",d(10),"지출","법인세","","전망",2200,"중간예납"],
+    ["국내",d(15),"수금","대여금 회입","","전망",800,""],
+    ["국내",d(20),"지출","지급어음 만기","","전망",1500,""],
+    ["해외",d(3),"수금","단독 입금","","실적",20,"베트남 기성 $20M"],
+    ["해외",d(3),"지출","업체 대금 지급","","실적",8,""],
+    ["해외",d(5),"수금","JV입금","","전망",15,"JV 정산"],
+    ["해외",d(3),"지출","국내 회입(시재 회수)","","전망",10,"본사 회수 $10M"],
   ];
-  s.forEach(r=>entries.push({id:uid(),date:r[0],type:r[1],category:r[2],project:r[3],plan:r[4],amount:r[5],memo:r[6]}));
+  s.forEach(r=>entries.push({id:uid(),region:r[0],date:r[1],type:r[2],category:r[3],project:r[4],plan:r[5],amount:r[6],memo:r[7]}));
   if(!settings.baseBalance){settings.baseDate=d(1);settings.baseBalance=50000;}
-  save();refreshPjtList();renderRecent();fillSettings();alert("샘플 10건을 넣었습니다. 각 탭을 확인해 보세요.");
+  if(!settings.ovBaseBalance)settings.ovBaseBalance=200;
+  settings.ytdBaseDate=d(1);
+  settings.ytdBase.국내["공사 수입(기성, 분양금)"]=15058;
+  settings.ytdBase.국내["받을어음 만기"]=24311;
+  save();refreshPjtList();renderRecent();fillSettings();renderYtdPanel();
+  alert("샘플 13건(국내 9·해외 4)과 '26 실적 기초값 예시를 넣었습니다. 갑지 탭을 확인해 보세요.");
 };
 
 /* ---------- init ---------- */
-syncCat();fillSettings();refreshPjtList();renderRecent();
+syncCat();fillSettings();refreshPjtList();renderRecent();renderYtdPanel();
 </script>
 </body>
 </html>
