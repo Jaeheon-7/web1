@@ -621,32 +621,32 @@ function gapjiCalc(region,D){
         .slice(0,2).map(e=>`${e.memo||e.project||label}_${fmt(e.amount)}`).join(", ");
     }
     const note=(label in m.note)?m.note[label]:auto;
-    const diff=(label in m.diff)?Number(m.diff[label]):(pReal-pPlan);
+    const diff=(label in m.diff)?String(m.diff[label]):"";  // 계획대비 주요 차이(수기 텍스트)
     return {label,ytd,pPlan,pReal,tPlan,diff,note};
   };
   const build=(blk,type)=>blk.map(l=>line(type,l.cats,l.label));
   return {입금:build(defs.입금,"수금"),지출:build(defs.지출,"지출"),prev,D,region};
 }
 function gTot(rows){return rows.reduce((a,r)=>({ytd:a.ytd+r.ytd,pPlan:a.pPlan+r.pPlan,
-  pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan,diff:a.diff+r.diff}),{ytd:0,pPlan:0,pReal:0,tPlan:0,diff:0});}
+  pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan}),{ytd:0,pPlan:0,pReal:0,tPlan:0});}
 function ratioTxt(plan,real){if(!plan)return real?"신규":"-";return Math.round(real/plan*100)+"%";}
 function gapjiHtml(D,region){
   region=region||"국내";
   const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
-  const eD=r=>`<input class="g-edit num" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" value="${r.diff?fmt(r.diff):''}">`;
+  const eD=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" value="${esc(r.diff)}" placeholder="계획대비 주요 차이">`;
   const eN=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="note" data-l="${esc(r.label)}" value="${esc(r.note)}">`;
   const rowHtml=r=>`<tr><td class="lft">${esc(r.label)}</td>
       <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
       <td class="num mut">${r.pPlan?fmt(r.pPlan):"-"}</td>
       <td class="num">${r.pReal?fmt(r.pReal):"-"}</td>
       <td class="num">${ratioTxt(r.pPlan,r.pReal)}</td>
-      <td class="num ${r.diff<0?'out':r.diff>0?'in':''}">${eD(r)}</td>
+      <td class="memo">${eD(r)}</td>
       <td class="num">${r.tPlan?fmt(r.tPlan):"-"}</td>
       <td class="memo">${eN(r)}</td></tr>`;
   const totHtml=(label,t)=>`<tr class="row-tot"><td class="lft">${label}</td>
       <td class="num">${fmt(t.ytd)}</td><td class="num">${fmt(t.pPlan)}</td>
       <td class="num">${fmt(t.pReal)}</td><td class="num">${ratioTxt(t.pPlan,t.pReal)}</td>
-      <td class="num ${t.diff<0?'out':t.diff>0?'in':''}">${fmt(t.diff)}</td>
+      <td class="memo"></td>
       <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;
   const inT=gTot(g.입금),outT=gTot(g.지출);
   // 국내 시재(사내예금/사내차입금) = 기초값 + '26 수지차, 금일 = +금일 수지차 (국내 갑지만)
@@ -677,7 +677,7 @@ function gapjiHtml(D,region){
       <div class="kpi"><div class="lbl">금일 지출(계획)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
       <div class="kpi"><div class="lbl">금일 예상 시재</div><div class="val num">${fmt(tb)}</div></div>
     </div>
-    <p class="note">전일=직전 영업일(${g.prev}). 계획=전망, 실적=실적. ‘차이’·‘내용’ 칸은 클릭해 수기 수정할 수 있습니다(입금 내용은 큰 건 2개 자동).</p>`;
+    <p class="note">전일=직전 영업일(${g.prev}). 계획=전망, 실적=실적. ‘차이’ 칸은 계획대비 주요 사항을 직접 적는 곳이며, ‘내용’ 칸도 수기 입력할 수 있습니다(입금 내용은 큰 건 2개 자동).</p>`;
   }
   return `<div class="g-title"><h3>${title}</h3><div class="d">${D}${ov?" · 해외":""}</div></div>
     <div class="g-unit">(${unit})</div>
@@ -703,8 +703,7 @@ function gapjiHtml(D,region){
 document.addEventListener("change",ev=>{
   const el=ev.target;if(!el.classList||!el.classList.contains("g-edit"))return;
   const m=mget(el.dataset.r,el.dataset.d),label=el.dataset.l;
-  if(el.dataset.k==="diff"){const v=el.value.trim();
-    if(v==="")delete m.diff[label];else m.diff[label]=parseNum(v);}
+  if(el.dataset.k==="diff")m.diff[label]=el.value;
   else m.note[label]=el.value;
   saveM();setTimeout(renderReports,0);
 });
@@ -815,7 +814,7 @@ function gapjiRows(D,region){
   const push=(blk)=>blk.forEach(r=>rows.push([r.label,r.ytd,r.pPlan,r.pReal,
     r.pPlan?Math.round(r.pReal/r.pPlan*100):"",r.diff,r.tPlan,r.note]));
   const tot=(label,t)=>rows.push([label,t.ytd,t.pPlan,t.pReal,
-    t.pPlan?Math.round(t.pReal/t.pPlan*100):"",t.diff,t.tPlan,""]);
+    t.pPlan?Math.round(t.pReal/t.pPlan*100):"","",t.tPlan,""]);
   rows.push(["[입금]","","","","","","",""]);push(g.입금);tot("입금 계",gTot(g.입금));
   rows.push(["[지출]","","","","","","",""]);push(g.지출);tot("지출 계",gTot(g.지출));
   const inT=gTot(g.입금),outT=gTot(g.지출);
