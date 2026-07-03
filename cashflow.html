@@ -237,7 +237,12 @@
         <div class="flex" style="margin:10px 0">
           <label style="margin:0">기초 기준일</label>
           <input type="date" id="g-ytd-date" style="width:auto">
-          <span class="note">이 날짜까지의 누계를 아래에 입력하면, 이후 실적은 자동으로 더해집니다.</span>
+          <span class="note">이 날짜까지의 누계를 아래에 입력하면, 여기에 전일 실적이 더해져 '26년 실적이 됩니다.</span>
+        </div>
+        <div class="flex" style="margin:0 0 10px">
+          <label style="margin:0">국내 시재(사내예금/사내차입금) 기초값</label>
+          <input type="text" id="g-nae-base" inputmode="numeric" style="width:140px">
+          <span class="note">'26 실적 수지차(입금 계−지출 계)가 더해집니다</span>
         </div>
         <div id="g-ytd-inputs" style="overflow:auto"></div>
       </details>
@@ -431,6 +436,7 @@ settings.unitFixed=true;
 if(settings.fx==null)settings.fx=1350;
 if(settings.ovBaseBalance==null)settings.ovBaseBalance=0;
 if(settings.ytdBaseDate==null)settings.ytdBaseDate="2026-07-01";
+if(settings.naeBase==null)settings.naeBase=0;
 if(!settings.ytdBase)settings.ytdBase={국내:{},해외:{}};
 if(!settings.ytdBase.국내)settings.ytdBase.국내={};
 if(!settings.ytdBase.해외)settings.ytdBase.해외={};
@@ -600,16 +606,15 @@ function prevBizDay(iso){let d=new Date(iso+"T12:00:00");
 function gapjiCalc(region,D){
   const data=region==="해외"?OV():DOM();
   const defs=region==="해외"?GAPJI_OV:GAPJI;
-  const prev=prevBizDay(D),ybd=settings.ytdBaseDate,base=settings.ytdBase[region]||{},m=mget(region,D);
+  const prev=prevBizDay(D),base=settings.ytdBase[region]||{},m=mget(region,D);
   const line=(type,cats,label)=>{
     const hit=e=>e.type===type&&cats.includes(e.category);
     const sum=f=>data.filter(e=>hit(e)&&f(e)).reduce((s,e)=>s+e.amount,0);
-    const realAfter=sum(e=>e.plan==="실적"&&e.date>ybd&&e.date<=D);
-    // 해외 '26 실적은 억원 기준: 기초값(억원) + 이후 실적(USD)×환율 환산
-    const ytd=(Number(base[label])||0)+(region==="해외"?usdToUk(realAfter):realAfter);
     const pPlan=sum(e=>e.plan==="전망"&&e.date===prev);
     const pReal=sum(e=>e.plan==="실적"&&e.date===prev);
     const tPlan=sum(e=>e.plan==="전망"&&e.date===D);
+    // '26년 실적 = 기초값 + 전일 실적 (해외는 억원 환산)
+    const ytd=(Number(base[label])||0)+(region==="해외"?usdToUk(pReal):pReal);
     let auto="";
     if(type==="수금"){
       auto=data.filter(e=>hit(e)&&e.plan==="전망"&&e.date===D).sort((a,b)=>b.amount-a.amount)
@@ -644,6 +649,14 @@ function gapjiHtml(D,region){
       <td class="num ${t.diff<0?'out':t.diff>0?'in':''}">${fmt(t.diff)}</td>
       <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;
   const inT=gTot(g.입금),outT=gTot(g.지출);
+  // 국내 시재(사내예금/사내차입금) = 기초값 + '26 수지차, 금일 = +금일 수지차 (국내 갑지만)
+  const naeYtd=(Number(settings.naeBase)||0)+(inT.ytd-outT.ytd);
+  const naeToday=naeYtd+(inT.tPlan-outT.tPlan);
+  const naeRow=ov?"":`<tr class="row-tot" style="background:#e7f6ef">
+      <td class="lft">국내 시재 (사내예금/사내차입금)</td>
+      <td class="num">${fmt(naeYtd)}</td>
+      <td class="num mut">-</td><td class="num">-</td><td class="num">-</td><td class="num">-</td>
+      <td class="num">${fmt(naeToday)}</td><td class="memo"></td></tr>`;
   const title=ov?"해외 자금수지 현황":"일일 자금수지 현황";
   const unit=ov?"백만USD · 환산 억원 = USD×환율÷100":"단위: "+esc(settings.unit);
   let sum;
@@ -682,6 +695,7 @@ function gapjiHtml(D,region){
     <tr class="grp"><td colspan="8">지출${ov?" (USD)":""}</td></tr>
     ${g.지출.map(rowHtml).join("")}
     ${totHtml("지출 계",outT)}
+    ${naeRow}
     </tbody></table></div>
     ${sum}`;
 }
@@ -704,6 +718,7 @@ document.addEventListener("change",ev=>{
 });
 function renderYtdPanel(){
   $("#g-ytd-date").value=settings.ytdBaseDate;
+  $("#g-nae-base").value=fmt(settings.naeBase||0);
   const tbl=(region,defs)=>{
     const rows=[...defs.입금,...defs.지출].map(l=>{const v=settings.ytdBase[region][l.label];
       return `<tr><td class="lft">${esc(l.label)}</td>
@@ -714,7 +729,8 @@ function renderYtdPanel(){
   };
   $("#g-ytd-inputs").innerHTML=`<div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">${tbl("국내",GAPJI)}${tbl("해외",GAPJI_OV)}</div>`;
 }
-$("#g-ytd-date").onchange=()=>{settings.ytdBaseDate=$("#g-ytd-date").value;save();renderGapji();};
+$("#g-ytd-date").onchange=()=>{settings.ytdBaseDate=$("#g-ytd-date").value;save();renderReports();};
+$("#g-nae-base").onchange=()=>{settings.naeBase=parseNum($("#g-nae-base").value);save();setTimeout(renderReports,0);};
 /* 향후 N영업일 전망 (주말 제외) */
 function fmtDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function bizDays(startISO,n){
@@ -803,6 +819,8 @@ function gapjiRows(D,region){
   rows.push(["[입금]","","","","","","",""]);push(g.입금);tot("입금 계",gTot(g.입금));
   rows.push(["[지출]","","","","","","",""]);push(g.지출);tot("지출 계",gTot(g.지출));
   const inT=gTot(g.입금),outT=gTot(g.지출);
+  if(!ov){const naeY=(Number(settings.naeBase)||0)+(inT.ytd-outT.ytd);
+    rows.push(["국내 시재(사내예금/사내차입금)",naeY,"","","","",naeY+(inT.tPlan-outT.tPlan),""]);}
   const pv=ov?ovBalanceAsOf(g.prev,"actual"):balanceAsOf(g.prev,"actual");
   rows.push(["","","","","","","",""]);
   rows.push([ov?"전일 해외시재":"전일 시재(실적)",pv,"","","","","",""]);
@@ -971,7 +989,7 @@ $("#s-restore").onchange=e=>{
       const s=snap.settings;
       settings={baseDate:s.baseDate||isoToday(),baseBalance:Number(s.baseBalance)||0,
         unit:s.unit||"억원",fx:Number(s.fx)||1350,ovBaseBalance:Number(s.ovBaseBalance)||0,
-        ytdBaseDate:s.ytdBaseDate||"2026-07-01",
+        unitFixed:true,naeBase:Number(s.naeBase)||0,ytdBaseDate:s.ytdBaseDate||"2026-07-01",
         ytdBase:(s.ytdBase&&typeof s.ytdBase==="object")?{국내:s.ytdBase.국내||{},해외:s.ytdBase.해외||{}}:{국내:{},해외:{}}};
     }
     manual=(snap.manual&&typeof snap.manual==="object")?snap.manual:{};
@@ -1127,6 +1145,7 @@ $("#s-sample").onclick=()=>{
   s.forEach(r=>entries.push({id:uid(),region:r[0],date:r[1],type:r[2],category:r[3],project:r[4],plan:r[5],amount:r[6],memo:r[7]}));
   if(!settings.baseBalance){settings.baseDate=d(1);settings.baseBalance=50000;}
   if(!settings.ovBaseBalance)settings.ovBaseBalance=200;
+  if(!settings.naeBase)settings.naeBase=8000;
   settings.ytdBaseDate=d(1);
   settings.ytdBase.국내["공사 수입(기성, 분양금)"]=15058;
   settings.ytdBase.국내["받을어음 만기"]=24311;
