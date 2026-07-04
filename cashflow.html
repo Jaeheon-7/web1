@@ -90,6 +90,21 @@
   .g-edit:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1px #7ba7d4}
   .g-edit.num{text-align:right;font-variant-numeric:tabular-nums}
   .g-edit.lft{text-align:left}
+  /* ---- 일별 현황판 ---- */
+  table.daily{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap}
+  table.daily th,table.daily td{border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);padding:5px 9px;text-align:right}
+  table.daily thead th{background:#eef3ea;color:#33445a;text-align:center;position:sticky;top:0;z-index:2}
+  table.daily th.we,table.daily thead th.we{background:#fdecea;color:#c0392b}
+  table.daily td.we{background:#fdf3f2}
+  table.daily .lbl{position:sticky;left:0;background:#fff;text-align:left;z-index:1;min-width:180px;border-right:2px solid var(--line)}
+  table.daily thead .lbl{z-index:3;background:#e7ecdf}
+  table.daily tr.grp td{background:#f1f5fb;font-weight:800;text-align:left}
+  table.daily tr.grp .lbl{background:#f1f5fb}
+  table.daily tr.tot td{background:#eaf0e6;font-weight:800}
+  table.daily tr.tot .lbl{background:#eaf0e6}
+  table.daily tr.bal td{background:#243b53;color:#fff;font-weight:800}
+  table.daily tr.bal .lbl{background:#243b53;color:#fff}
+  table.daily .z{color:#c7cfda}
   .g-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
   .g-sum .kpi .val{font-size:18px}
   @media print{
@@ -114,6 +129,7 @@
   <div class="tabs">
     <button data-tab="input" class="on">입력</button>
     <button data-tab="gapji">일일 갑지</button>
+    <button data-tab="daily">일별 현황판</button>
     <button data-tab="board">일일 모판</button>
     <button data-tab="trend">월 추이</button>
     <button data-tab="pjt">PJT · 전망대비</button>
@@ -168,8 +184,9 @@
             <label>메모</label>
             <input type="text" id="f-memo" placeholder="예: 3차 기성">
           </div>
-          <div style="grid-column:1/3">
-            <button class="btn" id="f-add" style="width:100%">＋ 추가</button>
+          <div style="grid-column:1/3;display:flex;gap:8px">
+            <button class="btn" id="f-add" style="flex:1">＋ 추가</button>
+            <button class="btn sec" id="f-cancel" style="display:none">수정 취소</button>
           </div>
         </div>
         <div>
@@ -182,6 +199,32 @@
           </div>
         </div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ DAILY BOARD (일별 현황판) ============ -->
+  <section id="tab-daily" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:10px">
+        <h2 style="margin:0">일별 현황판</h2>
+        <div class="right flex">
+          <select id="daily-region" style="width:auto">
+            <option value="국내">국내</option>
+            <option value="해외">해외(USD)</option>
+          </select>
+          <button class="btn sec sm" id="daily-prev">◀ 이전</button>
+          <input type="date" id="daily-start" style="width:auto">
+          <select id="daily-days" style="width:auto">
+            <option value="7">7일</option>
+            <option value="14" selected>14일</option>
+            <option value="31">31일</option>
+          </select>
+          <button class="btn sec sm" id="daily-next">다음 ▶</button>
+          <button class="btn sec sm" id="daily-xlsx">엑셀</button>
+        </div>
+      </div>
+      <div id="daily-board" style="overflow:auto"></div>
+      <p class="note">셀 = 해당 일자·항목 금액(과거 실적·미래 계획). 상단 ‘자금수지(국내시재)’는 국내 시재 누적입니다. 주말은 빨간 머리글.</p>
     </div>
   </section>
 
@@ -452,6 +495,7 @@ if(!settings.projects)settings.projects=[];
 const PJT_CATS=["공사수입(기성)","공사수입(분양금)","공동원가 회입","대여금 회입","사업비 차입"];
 let manual=load(KEY_M,{});         // manual[region][date]={diff:{label:num},note:{label:str}}
 let form={region:"국내",type:"수금",plan:"전망"};
+let editingId=null;
 function mget(region,date){manual[region]=manual[region]||{};
   manual[region][date]=manual[region][date]||{diff:{},note:{}};
   const m=manual[region][date];m.diff=m.diff||{};m.note=m.note||{};return m;}
@@ -479,8 +523,9 @@ function signed(e){return e.type==="수금"?e.amount:-e.amount;}
 /* ---------- tabs ---------- */
 $$(".tabs button").forEach(b=>b.onclick=()=>{
   $$(".tabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
-  ["input","gapji","board","trend","pjt","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
+  ["input","gapji","daily","board","trend","pjt","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
   if(b.dataset.tab==="gapji")renderGapji();
+  if(b.dataset.tab==="daily")renderDaily();
   if(b.dataset.tab==="board")renderBoard();
   if(b.dataset.tab==="trend")renderTrend();
   if(b.dataset.tab==="pjt")renderPjt();
@@ -517,7 +562,28 @@ function syncCat(){
   $("#f-amount").placeholder=ov?"예: 20 (백만불)":"예: 1,200";
   $$("#f-region button").forEach(b=>b.className=b.dataset.v===form.region?"on-plan":"");
   $$("#f-type button").forEach(b=>b.className=b.dataset.v===form.type?(form.type==="수금"?"on-in":"on-out"):"");
+  $$("#f-plan button").forEach(b=>b.className=b.dataset.v===form.plan?"on-plan":"");
 }
+function editEntry(id){
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  form.region=e.region||"국내";form.type=e.type;form.plan=e.plan;
+  syncCat();
+  $("#f-cat").value=e.category;syncPjtVis();
+  $("#f-date").value=e.date;
+  $("#f-amount").value=e.amount?fmt(e.amount):"";
+  $("#f-memo").value=e.memo||"";
+  if(needPjt()){
+    if(e.project&&!settings.projects.includes(e.project)){settings.projects.push(e.project);
+      settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));}
+    fillPjtSelect();$("#f-pjt").value=e.project||"";
+  }
+  editingId=id;
+  $("#f-add").textContent="수정 저장";$("#f-cancel").style.display="";
+  $("#tab-input").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function cancelEdit(){editingId=null;$("#f-add").textContent="＋ 추가";
+  $("#f-cancel").style.display="none";$("#f-amount").value="";$("#f-memo").value="";}
+$("#f-cancel").onclick=cancelEdit;
 $("#f-cat").onchange=syncPjtVis;
 $("#f-pjt").onchange=()=>{
   if($("#f-pjt").value!=="__new__")return;
@@ -539,6 +605,13 @@ $("#f-add").onclick=()=>{
   let pjt="";
   if(needPjt()){pjt=$("#f-pjt").value;
     if(!pjt||pjt==="__new__"){alert("이 항목은 PJT를 선택(또는 등록)해야 합니다.");$("#f-pjt").focus();return;}}
+  if(editingId){
+    const e=entries.find(x=>x.id===editingId);
+    if(e){e.date=$("#f-date").value||isoToday();e.region=form.region;e.type=form.type;
+      e.category=$("#f-cat").value;e.project=pjt;e.plan=form.plan;e.amount=amt;e.memo=$("#f-memo").value.trim();}
+    cancelEdit();save();renderRecent();
+    $("#f-amount").focus();return;
+  }
   entries.push({id:uid(),date:$("#f-date").value||isoToday(),region:form.region,type:form.type,
     category:$("#f-cat").value,project:pjt,
     plan:form.plan,amount:amt,memo:$("#f-memo").value.trim()});
@@ -561,8 +634,11 @@ function renderRecent(){
         ${esc(e.category)}${e.project?` · <span class="mut">${esc(e.project)}</span>`:""}
         ${e.memo?`<div class="sub">${esc(e.memo)}</div>`:""}</td>
       <td class="num ${e.type==='수금'?'in':'out'}">${fmt(e.amount)}${e.region==="해외"?'<span class="sub"> $</span>':''}</td>
-      <td><button class="btn danger sm" data-del="${e.id}">×</button></td></tr>`).join("")+`</tbody>`;
+      <td style="white-space:nowrap"><button class="btn sec sm" data-edit="${e.id}" title="수정">✎</button>
+        <button class="btn danger sm" data-del="${e.id}" title="삭제">×</button></td></tr>`).join("")+`</tbody>`;
+  $$("#recent-tbl [data-edit]").forEach(b=>b.onclick=()=>editEntry(b.dataset.edit));
   $$("#recent-tbl [data-del]").forEach(b=>b.onclick=()=>{
+    if(editingId===b.dataset.del)cancelEdit();
     entries=entries.filter(e=>e.id!==b.dataset.del);save();renderRecent();refreshPjtList();});
 }
 
@@ -868,6 +944,72 @@ $("#g-xlsx").onclick=()=>{
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_갑지_"+D+".xlsx";a.click();
 };
+
+/* ---------- 일별 현황판 ---------- */
+function naeBaseSum(){
+  const bi=GAPJI.입금.reduce((s,l)=>s+(Number(settings.ytdBase.국내[l.label])||0),0);
+  const bo=GAPJI.지출.reduce((s,l)=>s+(Number(settings.ytdBase.국내[l.label])||0),0);
+  return (Number(settings.naeBase)||0)+bi-bo;
+}
+function naeBalanceOn(date){ // 국내 시재 누적 (기초 + ybd 이후 수지차, 혼합)
+  const ybd=settings.ytdBaseDate,today=isoToday();let b=naeBaseSum();
+  for(const e of DOM()){if(e.date>ybd&&e.date<=date&&includeEntry(e,"mixed",today))b+=signed(e);}
+  return b;
+}
+function dailyDates(){
+  const start=$("#daily-start").value||isoToday(),n=+$("#daily-days").value||14,W=["일","월","화","수","목","금","토"];
+  const out=[];let d=new Date(start+"T12:00:00");
+  for(let k=0;k<n;k++){const wd=d.getDay();out.push({iso:fmtDate(d),wd,we:wd===0||wd===6,dow:W[wd]});d.setDate(d.getDate()+1);}
+  return out;
+}
+function dailyCell(data,cats,type,iso,today){
+  return data.filter(e=>e.type===type&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,"mixed",today)).reduce((s,e)=>s+e.amount,0);
+}
+function renderDaily(){
+  const region=$("#daily-region").value,ov=region==="해외";
+  const defs=ov?GAPJI_OV:GAPJI,data=ov?OV():DOM(),today=isoToday(),dates=dailyDates();
+  const numCell=(v,we)=>`<td class="${we?'we ':''}${v?'':'z'}">${v?fmt(v):"-"}</td>`;
+  const head=`<thead><tr><th class="lbl">구분 <span style="font-weight:400">(${ov?'백만USD':esc(settings.unit)})</span></th>`+
+    dates.map(x=>`<th class="${x.we?'we':''}">${x.dow}</th>`).join("")+`</tr>`+
+    `<tr><th class="lbl">날짜</th>`+dates.map(x=>`<th class="${x.we?'we':''}">${x.iso.slice(5)}</th>`).join("")+`</tr></thead>`;
+  const grp=label=>`<tr class="grp"><td class="lbl">${label}</td>`+dates.map(x=>`<td class="${x.we?'we':''}"></td>`).join("")+`</tr>`;
+  const balRow=`<tr class="bal"><td class="lbl">자금수지(${ov?'해외시재':'국내시재'})</td>`+
+    dates.map(x=>`<td class="${x.we?'we':''}">${fmt(ov?ovBalanceAsOf(x.iso,"mixed"):naeBalanceOn(x.iso))}</td>`).join("")+`</tr>`;
+  const lineRows=(blk,type)=>blk.map(l=>`<tr><td class="lbl">${esc(l.label)}</td>`+
+    dates.map(x=>numCell(dailyCell(data,l.cats,type,x.iso,today),x.we)).join("")+`</tr>`).join("");
+  const totRow=(label,blk,type)=>`<tr class="tot"><td class="lbl">${label}</td>`+
+    dates.map(x=>numCell(blk.reduce((s,l)=>s+dailyCell(data,l.cats,type,x.iso,today),0),x.we)).join("")+`</tr>`;
+  const body=`<tbody>${balRow}${grp("입금"+(ov?" (USD)":""))}${lineRows(defs.입금,"수금")}${totRow("입금 계",defs.입금,"수금")}`+
+    `${grp("지출"+(ov?" (USD)":""))}${lineRows(defs.지출,"지출")}${totRow("지출 계",defs.지출,"지출")}</tbody>`;
+  $("#daily-board").innerHTML=`<table class="daily">${head}${body}</table>`;
+}
+function dailyRows(){
+  const region=$("#daily-region").value,ov=region==="해외";
+  const defs=ov?GAPJI_OV:GAPJI,data=ov?OV():DOM(),today=isoToday(),dates=dailyDates(),rows=[];
+  rows.push(["요일",...dates.map(x=>x.dow)]);
+  rows.push(["날짜",...dates.map(x=>x.iso)]);
+  rows.push([`자금수지(${ov?'해외시재':'국내시재'})`,...dates.map(x=>ov?ovBalanceAsOf(x.iso,"mixed"):naeBalanceOn(x.iso))]);
+  rows.push(["[입금]"+(ov?"(USD)":"")]);
+  defs.입금.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"수금",x.iso,today))]));
+  rows.push(["입금 계",...dates.map(x=>defs.입금.reduce((s,l)=>s+dailyCell(data,l.cats,"수금",x.iso,today),0))]);
+  rows.push(["[지출]"+(ov?"(USD)":"")]);
+  defs.지출.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"지출",x.iso,today))]));
+  rows.push(["지출 계",...dates.map(x=>defs.지출.reduce((s,l)=>s+dailyCell(data,l.cats,"지출",x.iso,today),0))]);
+  return rows;
+}
+function dailyShift(delta){
+  const n=+$("#daily-days").value||14,d=new Date(($("#daily-start").value||isoToday())+"T12:00:00");
+  d.setDate(d.getDate()+delta*n);$("#daily-start").value=fmtDate(d);renderDaily();
+}
+$("#daily-prev").onclick=()=>dailyShift(-1);
+$("#daily-next").onclick=()=>dailyShift(1);
+$("#daily-region").onchange=renderDaily;$("#daily-days").onchange=renderDaily;$("#daily-start").onchange=renderDaily;
+$("#daily-xlsx").onclick=()=>{
+  const blob=buildXlsx([{name:"일별현황판",rows:dailyRows()}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_일별현황_"+($("#daily-start").value||isoToday())+".xlsx";a.click();
+};
+{const d=new Date();d.setDate(d.getDate()-2);$("#daily-start").value=fmtDate(d);}
 
 /* ---------- trend ---------- */
 $("#trend-month").value=isoToday().slice(0,7);
