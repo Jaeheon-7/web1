@@ -226,6 +226,11 @@
             <option value="국내">국내</option>
             <option value="해외">해외(USD)</option>
           </select>
+          <select id="daily-mode" style="width:auto" title="표시 기준">
+            <option value="mixed">혼합(과거 실적·미래 계획)</option>
+            <option value="forecast">전망(계획)</option>
+            <option value="actual">실적</option>
+          </select>
           <button class="btn sec sm" id="daily-prev">◀ 이전</button>
           <input type="date" id="daily-start" style="width:auto">
           <select id="daily-days" style="width:auto">
@@ -978,9 +983,9 @@ function naeBaseSum(){
   const bo=GAPJI.지출.reduce((s,l)=>s+(Number(settings.ytdBase.국내[l.label])||0),0);
   return (Number(settings.naeBase)||0)+bi-bo;
 }
-function naeBalanceOn(date){ // 국내 시재 누적 (기초 + ybd 이후 수지차, 혼합)
-  const ybd=settings.ytdBaseDate,today=isoToday();let b=naeBaseSum();
-  for(const e of DOM()){if(e.date>ybd&&e.date<=date&&includeEntry(e,"mixed",today))b+=signed(e);}
+function naeBalanceOn(date,mode){ // 국내 시재 누적 (기초 + ybd 이후 수지차)
+  const ybd=settings.ytdBaseDate,today=isoToday();let b=naeBaseSum();mode=mode||"mixed";
+  for(const e of DOM()){if(e.date>ybd&&e.date<=date&&includeEntry(e,mode,today))b+=signed(e);}
   return b;
 }
 function dailyDates(){
@@ -989,11 +994,11 @@ function dailyDates(){
   for(let k=0;k<n;k++){const wd=d.getDay();out.push({iso:fmtDate(d),wd,we:wd===0||wd===6,dow:W[wd]});d.setDate(d.getDate()+1);}
   return out;
 }
-function dailyCell(data,cats,type,iso,today){
-  return data.filter(e=>e.type===type&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,"mixed",today)).reduce((s,e)=>s+e.amount,0);
+function dailyCell(data,cats,type,iso,today,mode){
+  return data.filter(e=>e.type===type&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,mode||"mixed",today)).reduce((s,e)=>s+e.amount,0);
 }
 function renderDaily(){
-  const region=$("#daily-region").value,ov=region==="해외";
+  const region=$("#daily-region").value,ov=region==="해외",mode=$("#daily-mode").value||"mixed";
   const defs=ov?GAPJI_OV:GAPJI,data=ov?OV():DOM(),today=isoToday(),dates=dailyDates();
   const numCell=(v,we)=>`<td class="${we?'we ':''}${v?'':'z'}">${v?fmt(v):"-"}</td>`;
   const head=`<thead><tr><th class="lbl">구분 <span style="font-weight:400">(${ov?'백만USD':esc(settings.unit)})</span></th>`+
@@ -1001,28 +1006,28 @@ function renderDaily(){
     `<tr><th class="lbl">날짜</th>`+dates.map(x=>`<th class="${x.we?'we':''}">${x.iso.slice(5)}</th>`).join("")+`</tr></thead>`;
   const grp=label=>`<tr class="grp"><td class="lbl">${label}</td>`+dates.map(x=>`<td class="${x.we?'we':''}"></td>`).join("")+`</tr>`;
   const balRow=`<tr class="bal"><td class="lbl">자금수지(${ov?'해외시재':'국내시재'})</td>`+
-    dates.map(x=>`<td class="${x.we?'we':''}">${fmt(ov?ovBalanceAsOf(x.iso,"mixed"):naeBalanceOn(x.iso))}</td>`).join("")+`</tr>`;
+    dates.map(x=>`<td class="${x.we?'we':''}">${fmt(ov?ovBalanceAsOf(x.iso,mode):naeBalanceOn(x.iso,mode))}</td>`).join("")+`</tr>`;
   const lineRows=(blk,type)=>blk.map((l,li)=>`<tr><td class="lbl">${esc(l.label)}</td>`+
-    dates.map(x=>{const v=dailyCell(data,l.cats,type,x.iso,today);
+    dates.map(x=>{const v=dailyCell(data,l.cats,type,x.iso,today,mode);
       return `<td class="cellc ${x.we?'we ':''}${v?'':'z'}" data-t="${type}" data-li="${li}" data-iso="${x.iso}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`).join("");
   const totRow=(label,blk,type)=>`<tr class="tot"><td class="lbl">${label}</td>`+
-    dates.map(x=>numCell(blk.reduce((s,l)=>s+dailyCell(data,l.cats,type,x.iso,today),0),x.we)).join("")+`</tr>`;
+    dates.map(x=>numCell(blk.reduce((s,l)=>s+dailyCell(data,l.cats,type,x.iso,today,mode),0),x.we)).join("")+`</tr>`;
   const body=`<tbody>${balRow}${grp("입금"+(ov?" (USD)":""))}${lineRows(defs.입금,"수금")}${totRow("입금 계",defs.입금,"수금")}`+
     `${grp("지출"+(ov?" (USD)":""))}${lineRows(defs.지출,"지출")}${totRow("지출 계",defs.지출,"지출")}</tbody>`;
   $("#daily-board").innerHTML=`<table class="daily">${head}${body}</table>`;
 }
 function dailyRows(){
-  const region=$("#daily-region").value,ov=region==="해외";
+  const region=$("#daily-region").value,ov=region==="해외",mode=$("#daily-mode").value||"mixed";
   const defs=ov?GAPJI_OV:GAPJI,data=ov?OV():DOM(),today=isoToday(),dates=dailyDates(),rows=[];
   rows.push(["요일",...dates.map(x=>x.dow)]);
   rows.push(["날짜",...dates.map(x=>x.iso)]);
-  rows.push([`자금수지(${ov?'해외시재':'국내시재'})`,...dates.map(x=>ov?ovBalanceAsOf(x.iso,"mixed"):naeBalanceOn(x.iso))]);
+  rows.push([`자금수지(${ov?'해외시재':'국내시재'})`,...dates.map(x=>ov?ovBalanceAsOf(x.iso,mode):naeBalanceOn(x.iso,mode))]);
   rows.push(["[입금]"+(ov?"(USD)":"")]);
-  defs.입금.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"수금",x.iso,today))]));
-  rows.push(["입금 계",...dates.map(x=>defs.입금.reduce((s,l)=>s+dailyCell(data,l.cats,"수금",x.iso,today),0))]);
+  defs.입금.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"수금",x.iso,today,mode))]));
+  rows.push(["입금 계",...dates.map(x=>defs.입금.reduce((s,l)=>s+dailyCell(data,l.cats,"수금",x.iso,today,mode),0))]);
   rows.push(["[지출]"+(ov?"(USD)":"")]);
-  defs.지출.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"지출",x.iso,today))]));
-  rows.push(["지출 계",...dates.map(x=>defs.지출.reduce((s,l)=>s+dailyCell(data,l.cats,"지출",x.iso,today),0))]);
+  defs.지출.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"지출",x.iso,today,mode))]));
+  rows.push(["지출 계",...dates.map(x=>defs.지출.reduce((s,l)=>s+dailyCell(data,l.cats,"지출",x.iso,today,mode),0))]);
   return rows;
 }
 function dailyShift(delta){
@@ -1031,7 +1036,7 @@ function dailyShift(delta){
 }
 $("#daily-prev").onclick=()=>dailyShift(-1);
 $("#daily-next").onclick=()=>dailyShift(1);
-$("#daily-region").onchange=renderDaily;$("#daily-days").onchange=renderDaily;$("#daily-start").onchange=renderDaily;
+$("#daily-region").onchange=renderDaily;$("#daily-days").onchange=renderDaily;$("#daily-start").onchange=renderDaily;$("#daily-mode").onchange=renderDaily;
 $("#daily-xlsx").onclick=()=>{
   const blob=buildXlsx([{name:"일별현황판",rows:dailyRows()}]);
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
@@ -1097,6 +1102,7 @@ function renderCellModal(){
     save();renderCellModal();renderDaily();});
   $$("#cell-modal [data-conv]").forEach(b=>b.onclick=()=>{
     const e=entries.find(x=>x.id===b.dataset.conv);if(!e)return;
+    if(!confirm(`이 전망(${fmt(e.amount)})을 실적으로 전환할까요?\n전망 내역은 사라집니다.`))return;
     e.plan="실적";save();renderCellModal();renderDaily();});
   $$("#cell-modal [data-cdel]").forEach(b=>b.onclick=()=>{
     entries=entries.filter(x=>x.id!==b.dataset.cdel);save();renderCellModal();renderDaily();refreshPjtList();});
