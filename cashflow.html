@@ -928,7 +928,7 @@ function miniLine(vals){
   let g="";for(let k=0;k<=3;k++){const v=mn+(mx-mn)*k/3,y=py(v);
     g+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eef1f6"/><text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#98a2b3">${fmt(v)}</text>`;}
   const dots=vals.map((v,i)=>`<circle cx="${px(i)}" cy="${py(v)}" r="2.6" fill="${v<0?'#c0392b':'#2f6fb0'}"/>`).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">${g}`+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto">${g}`+
     (mn<0?`<line x1="${pad.l}" y1="${py(0)}" x2="${W-pad.r}" y2="${py(0)}" stroke="#c0392b" stroke-dasharray="3 3"/>`:"")+
     `<polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>${dots}</svg>`;
 }
@@ -988,33 +988,58 @@ function wireGapjiResizers(){
 }
 $("#g-wreset").onclick=()=>{settings.gapjiW={};save();renderReports();};
 /* 갑지 화면 그대로 PNG 캡쳐 (라이브러리 없이 SVG foreignObject) */
-async function captureNode(node,filename){
-  const w=Math.ceil(node.scrollWidth),h=Math.ceil(node.scrollHeight);
+function cloneForCapture(node){
   const clone=node.cloneNode(true);
-  // input/select → 값 텍스트로 치환 (캡쳐 시 값 표시)
   const oi=node.querySelectorAll("input,select,textarea"),ci=clone.querySelectorAll("input,select,textarea");
   ci.forEach((el,i)=>{const v=oi[i]?oi[i].value:(el.value||"");
     const s=document.createElement("span");s.textContent=v;s.setAttribute("class",el.getAttribute("class")||"");
-    s.setAttribute("style","display:inline-block;"+(el.getAttribute("style")||""));el.replaceWith(s);});
+    s.setAttribute("style","display:inline-block;white-space:pre;"+(el.getAttribute("style")||""));el.replaceWith(s);});
+  clone.querySelectorAll("*").forEach(el=>{if(/overflow/.test(el.getAttribute("style")||""))el.style.overflow="visible";});
+  return clone;
+}
+async function nodeToCanvas(node,tw){
+  const clone=cloneForCapture(node);
+  const wrap=document.createElement("div");
+  wrap.style.cssText="position:absolute;left:-99999px;top:0;background:#fff;padding:8px;width:"+tw+"px";
+  wrap.appendChild(clone);document.body.appendChild(wrap);
+  const w=Math.ceil(wrap.getBoundingClientRect().width),h=Math.ceil(wrap.scrollHeight);
+  wrap.style.cssText="background:#fff;padding:8px;width:"+tw+"px"; // 오프스크린 스타일 제거(직렬화용)
+  const xhtml=new XMLSerializer().serializeToString(wrap);document.body.removeChild(wrap);
   const styleText=[...document.querySelectorAll("style")].map(s=>s.textContent).join("\n");
-  const xhtml=new XMLSerializer().serializeToString(clone);
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">`+
     `<foreignObject width="100%" height="100%">`+
     `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;background:#fff">`+
     `<style><![CDATA[${styleText}]]></style>${xhtml}</div></foreignObject></svg>`;
-  const img=new Image();
-  img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
-  try{await img.decode();}catch(e){alert("이미지 생성 실패: "+e.message);return;}
+  const img=new Image();img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+  await img.decode();
   const sc=2,cv=document.createElement("canvas");cv.width=w*sc;cv.height=h*sc;
-  const ctx=cv.getContext("2d");ctx.scale(sc,sc);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);
-  ctx.drawImage(img,0,0);
-  cv.toBlob(blob=>{if(!blob){alert("이미지 저장 실패(브라우저 제한). CSV/PDF를 이용하세요.");return;}
+  const ctx=cv.getContext("2d");ctx.scale(sc,sc);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0);
+  return cv;
+}
+async function captureNodes(nodes,filename){
+  // 대상 폭 = 표(스크롤 포함) 실제 너비 기준으로 고정
+  let tw=0;
+  nodes.forEach(n=>{n.querySelectorAll("table").forEach(t=>tw=Math.max(tw,Math.ceil(t.scrollWidth)));
+    tw=Math.max(tw,Math.ceil(n.getBoundingClientRect().width));});
+  tw=Math.min(Math.max(tw,320),4000);
+  let canvases;
+  try{canvases=[];for(const n of nodes)canvases.push(await nodeToCanvas(n,tw));}
+  catch(e){alert("이미지 생성 실패: "+e.message);return;}
+  // 개별 캔버스를 세로로 이어붙임 (큰 높이 SVG 래스터화 실패 회피)
+  const gap=24,W=Math.max(...canvases.map(c=>c.width));
+  const H=canvases.reduce((s,c)=>s+c.height,0)+gap*(canvases.length-1);
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const ctx=out.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);
+  let y=0;for(const c of canvases){ctx.drawImage(c,0,y);y+=c.height+gap;}
+  out.toBlob(blob=>{if(!blob){alert("이미지 저장 실패(브라우저 제한). CSV/PDF를 이용하세요.");return;}
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();},"image/png");
 }
 $("#g-capture").onclick=()=>{
   const D=$("#g-date").value||isoToday();
-  const target=$("#g-report");
-  captureNode(target,"자금수지_갑지_"+D+".png");
+  const nodes=[$("#g-report")];
+  if(!settings.ovCollapsed)nodes.push($("#g-overseas"));
+  nodes.push($("#g-forecast"));
+  captureNodes(nodes,"자금수지_갑지_"+D+".png");
 };
 function renderGapji(){renderReports();renderYtdPanel();}
 $("#g-print").onclick=()=>window.print();
