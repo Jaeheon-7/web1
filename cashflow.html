@@ -1425,16 +1425,19 @@ function renderPjtSugum(){
   const head=`<thead><tr><th class="lbl">PJT / 세부구분 <span style="font-weight:400">(${esc(settings.unit)})</span></th>`+
     dates.map(x=>`<th class="${x.we?'we':''}">${x.dow}</th>`).join("")+`</tr>`+
     `<tr><th class="lbl">날짜</th>`+dates.map(x=>`<th class="${x.we?'we':''}">${x.iso.slice(5)}</th>`).join("")+`</tr></thead>`;
-  let body="";
+  let body="",shown=0;
   pjts.forEach(p=>{
+    const active=PJT_SUGUM.map((g,gi)=>({g,gi,has:dates.some(x=>cell(p,g.cats,x.iso))})).filter(o=>o.has);
+    if(!active.length)return; // 표시 기간에 값 없는 PJT는 숨김
+    shown++;
     body+=`<tr class="grp"><td class="lbl">${esc(p)}</td>`+
       dates.map(x=>{const v=PJT_SUGUM.reduce((s,g)=>s+cell(p,g.cats,x.iso),0);return `<td class="${x.we?'we':''}">${v?fmt(v):""}</td>`;}).join("")+`</tr>`;
-    PJT_SUGUM.forEach((g,gi)=>{body+=`<tr><td class="lbl" style="padding-left:22px">${esc(g.label)}</td>`+
+    active.forEach(({g,gi})=>{body+=`<tr><td class="lbl" style="padding-left:22px">${esc(g.label)}</td>`+
       dates.map(x=>{const v=cell(p,g.cats,x.iso);
         return `<td class="cellc ${x.we?'we ':''}${v?'':'z'}" data-p="${esc(p)}" data-g="${gi}" data-iso="${x.iso}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`;});
   });
-  if(!pjts.length)body=`<tr><td class="lbl">-</td><td class="empty" colspan="${dates.length}">PJT 수금 내역이 없습니다. 셀을 클릭해 추가하세요.</td></tr>`;
-  const totRow=pjts.length?`<tr class="tot"><td class="lbl">전체 합계</td>`+
+  if(!shown)body=`<tr><td class="lbl">-</td><td class="empty" colspan="${dates.length}">표시 기간에 PJT 수금 내역이 없습니다. 일별 현황판/입력에서 추가하세요.</td></tr>`;
+  const totRow=shown?`<tr class="tot"><td class="lbl">전체 합계</td>`+
     dates.map(x=>{const v=pjts.reduce((s,p)=>s+PJT_SUGUM.reduce((ss,g)=>ss+cell(p,g.cats,x.iso),0),0);return `<td class="${x.we?'we':''}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`:"";
   $("#ps-table").innerHTML=`<table class="daily">${head}<tbody>${body}${totRow}</tbody></table>`;
   $$("#ps-table .cellc").forEach(td=>td.onclick=()=>{const g=PJT_SUGUM[+td.dataset.g];
@@ -1445,8 +1448,10 @@ $("#ps-xlsx").onclick=()=>{
   const out=[["PJT / 세부구분","요일",...dates.map(x=>x.dow)]];
   out.push(["","날짜",...dates.map(x=>x.iso)]);
   pjts.forEach(p=>{
+    const active=PJT_SUGUM.filter(g=>dates.some(x=>cell(p,g.cats,x.iso)));
+    if(!active.length)return;
     out.push([p,"소계",...dates.map(x=>PJT_SUGUM.reduce((s,g)=>s+cell(p,g.cats,x.iso),0))]);
-    PJT_SUGUM.forEach(g=>out.push(["",g.label,...dates.map(x=>cell(p,g.cats,x.iso))]));
+    active.forEach(g=>out.push(["",g.label,...dates.map(x=>cell(p,g.cats,x.iso))]));
   });
   out.push(["전체 합계","",...dates.map(x=>pjts.reduce((s,p)=>s+PJT_SUGUM.reduce((ss,g)=>ss+cell(p,g.cats,x.iso),0),0))]);
   const blob=buildXlsx([{name:"PJT 수금실적",rows:out}]);
