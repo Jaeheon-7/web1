@@ -86,8 +86,11 @@
   table.rztbl{table-layout:fixed;width:auto}
   table.rztbl th{position:relative}
   table.rztbl td{overflow:hidden}
-  table.rztbl td.memo{overflow:visible}
-  table.rztbl .fc-note{width:100%}
+  table.rztbl td.memo{overflow:visible;white-space:normal}
+  .fc-note{width:100%;box-sizing:border-box;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;
+    font:inherit;color:inherit;border:1px solid transparent;border-radius:4px;padding:3px 5px;background:transparent;line-height:1.35;min-height:22px;display:block}
+  .fc-note:hover{background:#eef3fb}
+  .fc-note:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1px #7ba7d4}
   #g-ov-bar{margin-top:22px;cursor:pointer;background:#eef1f6;border:1px solid var(--line);border-radius:8px;
     padding:9px 14px;font-weight:800;color:#33445a;user-select:none}
   #g-ov-bar:hover{background:#e6ebf3}
@@ -961,7 +964,7 @@ function forecastHtml(D){
       <td class="num out">${r.o?fmt(r.o):"-"}</td>
       <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
       <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td>
-      <td class="memo"><input class="fc-note g-edit lft" data-iso="${r.iso}" value="${esc(r.note)}" placeholder=""></td></tr>`).join("");
+      <td class="memo"><textarea class="fc-note" data-iso="${r.iso}" rows="1">${esc(r.note)}</textarea></td></tr>`).join("");
   return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small></h2>
     <div class="kpis">
       ${kpi("기준 시재",fmt(f.startBal))}
@@ -984,8 +987,11 @@ function renderReports(){
   $("#g-report").innerHTML=gapjiHtml(D,"국내");
   $("#g-overseas").innerHTML=settings.ovCollapsed?"":gapjiHtml(D,"해외");
   $("#g-forecast").innerHTML=forecastHtml(D);
-  wireGapjiResizers();applyOvCollapse();
+  wireGapjiResizers();applyOvCollapse();growFcNotes();
 }
+function growFcNotes(){$$("#g-forecast .fc-note").forEach(t=>{t.style.height="auto";t.style.height=t.scrollHeight+"px";});}
+document.addEventListener("input",ev=>{const el=ev.target;
+  if(el.classList&&el.classList.contains("fc-note")){el.style.height="auto";el.style.height=el.scrollHeight+"px";}});
 function applyOvCollapse(){
   const c=settings.ovCollapsed;
   $("#g-overseas").style.display=c?"none":"";
@@ -1015,7 +1021,7 @@ function cloneForCapture(node){
   const oi=node.querySelectorAll("input,select,textarea"),ci=clone.querySelectorAll("input,select,textarea");
   ci.forEach((el,i)=>{const v=oi[i]?oi[i].value:(el.value||"");
     const s=document.createElement("span");s.textContent=v;s.setAttribute("class",el.getAttribute("class")||"");
-    s.setAttribute("style","display:inline-block;white-space:pre;"+(el.getAttribute("style")||""));el.replaceWith(s);});
+    s.setAttribute("style","display:block;white-space:pre-wrap;word-break:break-word;min-height:18px");el.replaceWith(s);});
   clone.querySelectorAll("*").forEach(el=>{if(/overflow/.test(el.getAttribute("style")||""))el.style.overflow="visible";});
   return clone;
 }
