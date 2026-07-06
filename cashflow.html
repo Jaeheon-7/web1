@@ -398,6 +398,14 @@
       <div id="pjt-manage"></div>
     </div>
     <div class="card">
+      <h2>사업부 엑셀 가져오기 <small>월별 PJT 수금/지출 파일을 열 매핑으로 반영</small></h2>
+      <div class="flex">
+        <label class="btn" style="cursor:pointer">📥 엑셀(.xlsx)/CSV 선택
+          <input type="file" id="imp-file" accept=".xlsx,.csv" hidden></label>
+      </div>
+      <p class="note">파일을 고르면 열을 지정(일자·PJT·금액 등)하고 미리보기 후 반영합니다. 어떤 양식이든 열만 맞추면 됩니다.</p>
+    </div>
+    <div class="card">
       <h2>파일로 데이터 저장 · 복원 <small>다른 PC로 옮길 때 사용하세요</small></h2>
       <div class="flex">
         <button class="btn" id="s-backup">💾 데이터 파일로 저장(.json)</button>
@@ -424,6 +432,7 @@
 </div>
 
 <div id="cell-modal" class="modal-bg" hidden><div class="modal"></div></div>
+<div id="imp-modal" class="modal-bg" hidden><div class="modal" style="max-width:900px"></div></div>
 
 <script>
 "use strict";
@@ -1455,6 +1464,153 @@ function parseCsv(text){
     out.push(o);}
   return out;
 }
+/* ----- 사업부 엑셀/CSV 가져오기 (열 매핑) ----- */
+function colIdx(ref){let n=0;for(const ch of ref)n=n*26+(ch.charCodeAt(0)-64);return n-1;}
+function xUnesc(s){return String(s).replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(_,d)=>String.fromCharCode(+d)).replace(/&amp;/g,"&");}
+function excelDate(serial){const ms=Math.round((serial-25569)*86400000);const d=new Date(ms);
+  return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
+async function inflateRaw(u8){
+  const ds=new DecompressionStream("deflate-raw");
+  const ab=await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+async function readXlsxRows(buf){
+  const dv=new DataView(buf),u8=new Uint8Array(buf),dec=new TextDecoder();
+  let eocd=-1;for(let i=u8.length-22;i>=0;i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}}
+  if(eocd<0)throw new Error("올바른 xlsx가 아닙니다");
+  let p=dv.getUint32(eocd+16,true);const cnt=dv.getUint16(eocd+10,true),files={};
+  for(let n=0;n<cnt;n++){
+    const method=dv.getUint16(p+10,true),compSize=dv.getUint32(p+20,true);
+    const nameLen=dv.getUint16(p+28,true),exLen=dv.getUint16(p+30,true),cmLen=dv.getUint16(p+32,true);
+    const lo=dv.getUint32(p+42,true),name=dec.decode(u8.subarray(p+46,p+46+nameLen));
+    const lNameLen=dv.getUint16(lo+26,true),lExLen=dv.getUint16(lo+28,true);
+    const start=lo+30+lNameLen+lExLen;files[name]={method,data:u8.subarray(start,start+compSize)};
+    p+=46+nameLen+exLen+cmLen;
+  }
+  const get=async n=>{const f=files[n];if(!f)return null;return dec.decode(f.method===0?f.data:await inflateRaw(f.data));};
+  let shared=[];const ss=await get("xl/sharedStrings.xml");
+  if(ss)shared=(ss.match(/<si>[\s\S]*?<\/si>/g)||[]).map(si=>(si.match(/<t[^>]*>([\s\S]*?)<\/t>/g)||[]).map(t=>xUnesc(t.replace(/<[^>]+>/g,""))).join(""));
+  // 첫 시트 (workbook 순서 우선, 없으면 sheet1)
+  let sheetFile="xl/worksheets/sheet1.xml";
+  const wbRels=await get("xl/_rels/workbook.xml.rels"),wb=await get("xl/workbook.xml");
+  if(wb&&wbRels){const first=(wb.match(/<sheet[^>]*r:id="([^"]+)"/)||[])[1];
+    if(first){const tgt=(wbRels.match(new RegExp('Id="'+first+'"[^>]*Target="([^"]+)"'))||[])[1];
+      if(tgt)sheetFile="xl/"+tgt.replace(/^\//,"").replace(/^xl\//,"");}}
+  const sx=await get(sheetFile)||await get("xl/worksheets/sheet1.xml");
+  const rows=[];
+  for(const rm of (sx.match(/<row[^>]*>[\s\S]*?<\/row>/g)||[])){
+    const cells=[];
+    for(const cm of (rm.match(/<c[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)||[])){
+      const ref=(cm.match(/r="([A-Z]+)\d+"/)||[])[1];if(!ref)continue;
+      const ci=colIdx(ref),t=(cm.match(/ t="([^"]+)"/)||[])[1];
+      let val="";
+      if(t==="s"){const v=(cm.match(/<v>([\s\S]*?)<\/v>/)||[])[1];val=shared[+v]||"";}
+      else if(t==="inlineStr"||t==="str"){const is=(cm.match(/<t[^>]*>([\s\S]*?)<\/t>/)||[[,""]])[1];val=xUnesc(is||"");}
+      else{const v=(cm.match(/<v>([\s\S]*?)<\/v>/)||[])[1];val=v!=null?v:"";}
+      cells[ci]=val;
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+function csvToRows(text){
+  const rows=[];let i=0,f="",row=[],q=false;text=text.replace(/^﻿/,"");
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else{if(c==='"')q=true;else if(c===","){row.push(f);f="";}
+      else if(c==="\n"){row.push(f);rows.push(row);row=[];f="";}else if(c!=="\r")f+=c;}
+    i++;}
+  if(f.length||row.length){row.push(f);rows.push(row);}
+  return rows;
+}
+let impRows=null;
+$("#imp-file").onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    if(/\.csv$/i.test(f.name))impRows=csvToRows(await f.text());
+    else impRows=await readXlsxRows(await f.arrayBuffer());
+  }catch(err){alert("파일을 읽지 못했습니다: "+err.message+"\n엑셀을 CSV로 저장해 다시 시도해 보세요.");e.target.value="";return;}
+  e.target.value="";
+  impRows=impRows.filter(r=>r&&r.some(c=>String(c).trim()!==""));
+  if(impRows.length<2){alert("데이터가 부족합니다(머리글+1행 이상 필요).");return;}
+  $("#imp-modal").hidden=false;renderImport();
+};
+$("#imp-modal").onclick=ev=>{if(ev.target.id==="imp-modal")$("#imp-modal").hidden=true;};
+const impMap={hdr:0,date:-1,pjt:-1,cat:-1,memo:-1,amtMode:"split",inAmt:-1,outAmt:-1,typeCol:-1,amtCol:-1,
+  plan:"전망",region:"국내",fixDate:"",catIn:"공사수입(기성)",catOut:"현장 대금지급"};
+function impCols(){const h=impRows[impMap.hdr]||[];const w=Math.max(...impRows.map(r=>r.length));
+  const out=[];for(let i=0;i<w;i++)out.push({i,name:(h[i]!=null&&String(h[i]).trim())?String(h[i]).trim():"열"+String.fromCharCode(65+i)});return out;}
+function colSel(field,cur,allowNone){const opts=(allowNone?`<option value="-1">— 없음 —</option>`:"")+
+  impCols().map(c=>`<option value="${c.i}"${c.i===cur?" selected":""}>${esc(c.name)}</option>`).join("");
+  return `<select class="imp" data-k="${field}">${opts}</select>`;}
+function buildImport(){
+  const m=impMap,out=[],newPjts=new Set();
+  for(let r=m.hdr+1;r<impRows.length;r++){
+    const row=impRows[r];if(!row)continue;
+    const cell=i=>i>=0?String(row[i]??"").trim():"";
+    let date=m.date>=0?cell(m.date):m.fixDate;
+    if(m.date>=0&&/^\d+(\.\d+)?$/.test(date)&&Number(date)>20000&&Number(date)<80000)date=excelDate(Number(date));
+    date=String(date).replace(/[./]/g,"-").slice(0,10);
+    if(!/^\d{4}-\d{1,2}-\d{1,2}$/.test(date))date=m.fixDate; // 파싱 실패 시 일괄일자
+    if(!date)continue;
+    date=date.replace(/-(\d)(?=-|$)/g,"-0$1");
+    const pjt=cell(m.pjt),memo=cell(m.memo),catText=cell(m.cat);
+    if(pjt)newPjts.add(pjt);
+    const mk=(type,amt)=>{if(!amt)return;const cat=catText||(type==="수금"?m.catIn:m.catOut);
+      out.push({id:uid(),date,region:m.region,type,category:cat,project:type==="수금"?pjt:"",
+        plan:m.plan,amount:amt,memo});};
+    if(m.amtMode==="split"){mk("수금",parseNum(cell(m.inAmt)));mk("지출",parseNum(cell(m.outAmt)));}
+    else{const t=cell(m.typeCol),amt=parseNum(cell(m.amtCol));
+      mk(/지출|출금|지급/.test(t)?"지출":"수금",amt);}
+  }
+  return {out,newPjts:[...newPjts]};
+}
+function renderImport(){
+  const m=impMap,split=m.amtMode==="split";
+  const catOpts=list=>list.map(c=>`<option>${esc(c)}</option>`).join("");
+  const {out}=buildImport();
+  const prev=out.slice(0,8).map(e=>`<tr><td>${e.date}</td><td>${e.region}</td><td class="${e.type==="수금"?"in":"out"}">${e.type}</td><td>${esc(e.category)}</td><td>${esc(e.project)}</td><td class="num">${fmt(e.amount)}</td></tr>`).join("");
+  $("#imp-modal .modal").innerHTML=`
+    <div class="flex" style="margin-bottom:10px"><strong style="font-size:15px">엑셀 가져오기 — 열 매핑</strong>
+      <button class="btn sec sm right" id="imp-close">닫기</button></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div><label>머리글 행</label><select class="imp" data-k="hdr">${impRows.slice(0,5).map((_,i)=>`<option value="${i}"${i===m.hdr?" selected":""}>${i+1}행</option>`).join("")}</select></div>
+      <div><label>일자 열</label>${colSel("date",m.date,true)}</div>
+      <div><label>일자 열 없을 때 일괄 적용일</label><input class="imp" data-k="fixDate" type="date" value="${m.fixDate}"></div>
+      <div><label>PJT 열</label>${colSel("pjt",m.pjt,true)}</div>
+      <div><label>상세구분 열 <span class="sub">(없으면 기본값)</span></label>${colSel("cat",m.cat,true)}</div>
+      <div><label>메모 열</label>${colSel("memo",m.memo,true)}</div>
+      <div><label>금액 방식</label><select class="imp" data-k="amtMode"><option value="split"${split?" selected":""}>수금열/지출열 분리</option><option value="single"${!split?" selected":""}>구분열+금액열</option></select></div>
+      ${split?`<div><label>수금 금액 열</label>${colSel("inAmt",m.inAmt,true)}</div><div><label>지출 금액 열</label>${colSel("outAmt",m.outAmt,true)}</div>`
+             :`<div><label>구분 열(수금/지출)</label>${colSel("typeCol",m.typeCol,true)}</div><div><label>금액 열</label>${colSel("amtCol",m.amtCol,true)}</div>`}
+      <div><label>기본 수금 상세구분</label><select class="imp" data-k="catIn">${catOpts(CATS.수금)}</select></div>
+      <div><label>기본 지출 상세구분</label><select class="imp" data-k="catOut">${catOpts(CATS.지출)}</select></div>
+      <div><label>전망 / 실적</label><select class="imp" data-k="plan"><option${m.plan==="전망"?" selected":""}>전망</option><option${m.plan==="실적"?" selected":""}>실적</option></select></div>
+      <div><label>국내 / 해외</label><select class="imp" data-k="region"><option${m.region==="국내"?" selected":""}>국내</option><option${m.region==="해외"?" selected":""}>해외</option></select></div>
+    </div>
+    <div style="margin-top:12px"><strong style="font-size:13px">미리보기</strong> <span class="sub">(총 ${out.length}건 생성 예정, 앞 8건)</span>
+      <div style="overflow:auto;border:1px solid var(--line2);border-radius:8px;margin-top:4px">
+      <table class="ce-tbl"><thead><tr><th>일자</th><th>국내외</th><th>구분</th><th>상세구분</th><th>PJT</th><th>금액</th></tr></thead>
+      <tbody>${prev||`<tr><td colspan="6" class="empty">매핑을 지정하면 미리보기가 표시됩니다</td></tr>`}</tbody></table></div></div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn" id="imp-go" ${out.length?"":"disabled"}>＋ ${out.length}건 가져오기(추가)</button>
+      <span class="note" style="align-self:center">기존 내역에 추가됩니다. 되돌리려면 가져온 건을 최근 입력/현황판에서 삭제하세요.</span></div>`;
+  // set select values
+  $("#imp-modal .imp[data-k=catIn]").value=m.catIn;$("#imp-modal .imp[data-k=catOut]").value=m.catOut;
+  $("#imp-close").onclick=()=>$("#imp-modal").hidden=true;
+  $$("#imp-modal .imp").forEach(el=>el.onchange=()=>{
+    const k=el.dataset.k,num=["hdr","date","pjt","cat","memo","inAmt","outAmt","typeCol","amtCol"].includes(k);
+    impMap[k]=num?parseInt(el.value):el.value;renderImport();});
+  $("#imp-go").onclick=()=>{
+    const {out,newPjts}=buildImport();if(!out.length)return;
+    newPjts.forEach(p=>{if(!settings.projects.includes(p))settings.projects.push(p);});
+    settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));
+    entries=entries.concat(out);save();refreshPjtList();renderRecent();renderPjtManage();
+    $("#imp-modal").hidden=true;
+    alert(out.length+"건을 가져왔습니다.");
+  };
+}
+
 $("#s-clear").onclick=()=>{if(confirm("모든 데이터를 삭제할까요? 되돌릴 수 없습니다."))
   {entries=[];save();refreshPjtList();renderRecent();alert("삭제했습니다.");}};
 $("#s-sample").onclick=()=>{
