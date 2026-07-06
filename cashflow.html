@@ -190,6 +190,10 @@
             <label>PJT <span class="sub">(등록 목록에서 선택 · 새 PJT는 등록 후 사용)</span></label>
             <select id="f-pjt"></select>
           </div>
+          <div id="f-fx-box" style="grid-column:1/3;display:none">
+            <label>회입 적용환율 <span class="sub">(원/USD · 회입시점 환율)</span></label>
+            <input type="text" id="f-fx" inputmode="numeric" placeholder="예: 1,350">
+          </div>
           <div style="grid-column:1/3">
             <label>메모</label>
             <input type="text" id="f-memo" placeholder="예: 3차 기성">
@@ -512,12 +516,12 @@ function mget(region,date){manual[region]=manual[region]||{};
   manual[region][date]=manual[region][date]||{diff:{},note:{}};
   const m=manual[region][date];m.diff=m.diff||{};m.note=m.note||{};return m;}
 function saveM(){localStorage.setItem(KEY_M,JSON.stringify(manual));}
-function usdToUk(usdM){return usdM*(Number(settings.fx)||0)/100;} // 백만USD → 억원
-/* 국내 유효내역 = 국내 입력 + (해외 시재회수 → 연결법인 시재 회입 환산분) */
+function usdToUk(usdM,fx){return usdM*((Number(fx)||Number(settings.fx))||0)/100;} // 백만USD → 억원 (건별 fx 우선)
+/* 국내 유효내역 = 국내 입력 + (해외 시재회수 → 연결법인 시재 회입 환산분, 회입시점 환율 적용) */
 function DOM(){
   const syn=entries.filter(e=>e.region==="해외"&&e.category===REPAT).map(e=>({
     id:e.id+"_syn",date:e.date,type:"수금",category:"연결법인 시재 회입",project:"",
-    plan:e.plan,amount:usdToUk(e.amount),memo:"해외 시재 회입 환산",region:"국내",_syn:true}));
+    plan:e.plan,amount:usdToUk(e.amount,e.fx),memo:"해외 시재 회입 환산",region:"국내",_syn:true}));
   return entries.filter(e=>e.region!=="해외").concat(syn);
 }
 function OV(){return entries.filter(e=>e.region==="해외");}
@@ -563,12 +567,18 @@ function fillPjtSelect(){
   $("#f-pjt").innerHTML=opts+`<option value="__new__">＋ 새 PJT 등록…</option>`;
   if(cur&&[...settings.projects,"__new__"].includes(cur))$("#f-pjt").value=cur;
 }
-function syncPjtVis(){$("#f-pjt-box").style.display=needPjt()?"":"none";}
+function needFx(){return form.region==="해외"&&form.type==="지출"&&$("#f-cat").value===REPAT;}
+function syncCatDeps(){
+  $("#f-pjt-box").style.display=needPjt()?"":"none";
+  $("#f-fx-box").style.display=needFx()?"":"none";
+  if(needFx()&&!$("#f-fx").value)$("#f-fx").value=fmt(settings.fx);
+}
+function syncPjtVis(){syncCatDeps();}
 function syncCat(){
   const ov=form.region==="해외";
   const cats=(ov?CATS_OV:CATS)[form.type];
   $("#f-cat").innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
-  syncPjtVis();
+  syncCatDeps();
   $("#fx-hint").style.display=ov?"":"none";
   $("#unit-lbl2").textContent=ov?"(백만USD)":"("+settings.unit+")";
   $("#f-amount").placeholder=ov?"예: 20 (백만불)":"예: 1,200";
@@ -580,7 +590,7 @@ function editEntry(id){
   const e=entries.find(x=>x.id===id);if(!e)return;
   form.region=e.region||"국내";form.type=e.type;form.plan=e.plan;
   syncCat();
-  $("#f-cat").value=e.category;syncPjtVis();
+  $("#f-cat").value=e.category;syncCatDeps();
   $("#f-date").value=e.date;
   $("#f-amount").value=e.amount?fmt(e.amount):"";
   $("#f-memo").value=e.memo||"";
@@ -589,12 +599,13 @@ function editEntry(id){
       settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));}
     fillPjtSelect();$("#f-pjt").value=e.project||"";
   }
+  if(needFx())$("#f-fx").value=e.fx?fmt(e.fx):fmt(settings.fx);
   editingId=id;
   $("#f-add").textContent="수정 저장";$("#f-cancel").style.display="";
   $("#tab-input").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function cancelEdit(){editingId=null;$("#f-add").textContent="＋ 추가";
-  $("#f-cancel").style.display="none";$("#f-amount").value="";$("#f-memo").value="";}
+  $("#f-cancel").style.display="none";$("#f-amount").value="";$("#f-memo").value="";$("#f-fx").value="";}
 $("#f-cancel").onclick=cancelEdit;
 $("#f-cat").onchange=syncPjtVis;
 $("#f-pjt").onchange=()=>{
@@ -617,16 +628,20 @@ $("#f-add").onclick=()=>{
   let pjt="";
   if(needPjt()){pjt=$("#f-pjt").value;
     if(!pjt||pjt==="__new__"){alert("이 항목은 PJT를 선택(또는 등록)해야 합니다.");$("#f-pjt").focus();return;}}
+  const fxv=needFx()?(parseNum($("#f-fx").value)||Number(settings.fx)):undefined;
   if(editingId){
     const e=entries.find(x=>x.id===editingId);
     if(e){e.date=$("#f-date").value||isoToday();e.region=form.region;e.type=form.type;
-      e.category=$("#f-cat").value;e.project=pjt;e.plan=form.plan;e.amount=amt;e.memo=$("#f-memo").value.trim();}
+      e.category=$("#f-cat").value;e.project=pjt;e.plan=form.plan;e.amount=amt;e.memo=$("#f-memo").value.trim();
+      if(fxv!==undefined)e.fx=fxv;else delete e.fx;}
     cancelEdit();save();renderRecent();
     $("#f-amount").focus();return;
   }
-  entries.push({id:uid(),date:$("#f-date").value||isoToday(),region:form.region,type:form.type,
+  const ne={id:uid(),date:$("#f-date").value||isoToday(),region:form.region,type:form.type,
     category:$("#f-cat").value,project:pjt,
-    plan:form.plan,amount:amt,memo:$("#f-memo").value.trim()});
+    plan:form.plan,amount:amt,memo:$("#f-memo").value.trim()};
+  if(fxv!==undefined)ne.fx=fxv;
+  entries.push(ne);
   save();$("#f-amount").value="";$("#f-memo").value="";
   renderRecent();
   $("#f-amount").focus();
@@ -788,7 +803,7 @@ function gapjiHtml(D,region){
       <div class="kpi"><div class="lbl">금일 지출(계획,USD)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
       <div class="kpi"><div class="lbl">금일 예상 해외시재</div><div class="val num">${fmt(tb)}<span class="sub"> ≈ ${fmt(usdToUk(tb))}억</span></div></div>
     </div>
-    <p class="note">적용환율 ${fmt(settings.fx)}원/USD. ‘'26년 실적’은 억원(기초값+실적 환산), 그 외 열은 USD 기준입니다. ‘국내 회입(시재 회수)’ 지출액은 국내 갑지의 ‘연결법인 시재 회입’에 환산되어 자동 반영됩니다.</p>`;
+    <p class="note">기본환율 ${fmt(settings.fx)}원/USD. ‘'26년 실적’은 억원(기초값+실적 환산), 그 외 열은 USD 기준입니다. ‘국내 회입(시재 회수)’은 <b>회입 건별 환율</b>로 환산되어 국내 갑지 ‘연결법인 시재 회입’에 자동 반영됩니다(환율은 현황판 셀·입력에서 지정).</p>`;
   }else{
     sum=`<div class="g-sum">
       <div class="kpi"><div class="lbl">전일 시재(실적)</div><div class="val num">${fmt(naeYtd)}</div></div>
@@ -1042,14 +1057,16 @@ function cellEntries(){const c=cellCtx;
 function renderCellModal(){
   const c=cellCtx,ov=c.region==="해외",unit=ov?"백만USD":settings.unit;
   const multiCat=c.cats.length>1,pjtOn=(!ov&&c.type==="수금"&&PJT_CATS.includes(c.cats[0]));
+  const fxOn=(c.region==="해외"&&c.type==="지출"&&c.cats.includes(REPAT));
   const es=cellEntries();
   const row=e=>{
     const catCell=multiCat?`<select class="ce" data-f="category" data-id="${e.id}">${c.cats.map(x=>`<option${x===e.category?" selected":""}>${esc(x)}</option>`).join("")}</select>`:`<span class="mut">${esc(e.category)}</span>`;
     const pjtCell=pjtOn?`<td><select class="ce" data-f="project" data-id="${e.id}">${(settings.projects||[]).map(x=>`<option${x===e.project?" selected":""}>${esc(x)}</option>`).join("")}${!settings.projects.includes(e.project)&&e.project?`<option selected>${esc(e.project)}</option>`:""}</select></td>`:"";
+    const fxCell=fxOn?`<td><input class="ce num" data-f="fx" data-id="${e.id}" value="${e.fx?fmt(e.fx):fmt(settings.fx)}" style="width:66px" title="회입시점 환율(원/USD) → 국내 환산 ${fmt(usdToUk(e.amount,e.fx))}억"></td>`:"";
     return `<tr>
       <td><select class="ce" data-f="plan" data-id="${e.id}"><option${e.plan==="전망"?" selected":""}>전망</option><option${e.plan==="실적"?" selected":""}>실적</option></select></td>
       <td>${catCell}</td>${pjtCell}
-      <td><input class="ce num" data-f="amount" data-id="${e.id}" value="${fmt(e.amount)}" style="width:88px"></td>
+      <td><input class="ce num" data-f="amount" data-id="${e.id}" value="${fmt(e.amount)}" style="width:88px"></td>${fxCell}
       <td><input class="ce" data-f="memo" data-id="${e.id}" value="${esc(e.memo)}" style="width:150px"></td>
       <td style="white-space:nowrap">${e.plan==="전망"?`<button class="btn sm" data-toreal="${e.id}" style="background:#1a7f5a;color:#fff" title="전망은 그대로 두고 실적을 복사 생성">실적복사</button> <button class="btn sm" data-conv="${e.id}" style="background:#2f6fb0;color:#fff" title="이 전망을 실적으로 전환(전망 삭제)">실적전환</button> `:""}<button class="btn danger sm" data-cdel="${e.id}">삭제</button></td></tr>`;
   };
@@ -1058,23 +1075,25 @@ function renderCellModal(){
       <strong style="font-size:14px">${c.iso} · ${esc(c.label)} · <span class="${c.type==="수금"?"in":"out"}">${c.type}</span>${ov?" (USD)":""}</strong>
       <button class="btn sec sm right" id="cell-close">닫기</button>
     </div>
-    <table class="ce-tbl"><thead><tr><th>구분</th><th>상세</th>${pjtOn?"<th>PJT</th>":""}<th>금액(${esc(unit)})</th><th>메모</th><th></th></tr></thead>
-    <tbody>${es.length?es.map(row).join(""):`<tr><td colspan="6" class="empty">내역이 없습니다. 아래에서 추가하세요.</td></tr>`}</tbody></table>
+    <table class="ce-tbl"><thead><tr><th>구분</th><th>상세</th>${pjtOn?"<th>PJT</th>":""}<th>금액(${esc(unit)})</th>${fxOn?"<th>환율(원/$)</th>":""}<th>메모</th><th></th></tr></thead>
+    <tbody>${es.length?es.map(row).join(""):`<tr><td colspan="7" class="empty">내역이 없습니다. 아래에서 추가하세요.</td></tr>`}</tbody></table>
     <div style="margin-top:10px;display:flex;gap:8px">
       <button class="btn sm" id="cell-add-plan">＋ 전망 추가</button>
       <button class="btn sm" id="cell-add-real" style="background:#1a7f5a;color:#fff">＋ 실적 추가</button>
     </div>
     <p class="note">‘실적복사’=전망 유지 + 실적 생성(계획·실적 비교용) · ‘실적전환’=전망을 실적으로 바꿈(전망 삭제). 실제 금액만 고치면 됩니다.${c.label.includes("연결법인")?" 해외 시재 회수 환산분은 해외 현황판에서 관리하세요.":""}</p>`;
   $("#cell-close").onclick=closeCellModal;
-  const addEntry=plan=>{entries.push({id:uid(),date:c.iso,region:c.region,type:c.type,category:c.cats[0],
-    project:pjtOn?(settings.projects[0]||""):"",plan,amount:0,memo:""});
+  const addEntry=plan=>{const ne={id:uid(),date:c.iso,region:c.region,type:c.type,category:c.cats[0],
+    project:pjtOn?(settings.projects[0]||""):"",plan,amount:0,memo:""};
+    if(fxOn)ne.fx=Number(settings.fx);entries.push(ne);
     save();renderCellModal();renderDaily();};
   $("#cell-add-plan").onclick=()=>addEntry("전망");
   $("#cell-add-real").onclick=()=>addEntry("실적");
   $$("#cell-modal [data-toreal]").forEach(b=>b.onclick=()=>{
     const e=entries.find(x=>x.id===b.dataset.toreal);if(!e)return;
-    entries.push({id:uid(),date:e.date,region:e.region,type:e.type,category:e.category,
-      project:e.project,plan:"실적",amount:e.amount,memo:e.memo});
+    const ne={id:uid(),date:e.date,region:e.region,type:e.type,category:e.category,
+      project:e.project,plan:"실적",amount:e.amount,memo:e.memo};
+    if(e.fx)ne.fx=e.fx;entries.push(ne);
     save();renderCellModal();renderDaily();});
   $$("#cell-modal [data-conv]").forEach(b=>b.onclick=()=>{
     const e=entries.find(x=>x.id===b.dataset.conv);if(!e)return;
@@ -1084,7 +1103,9 @@ function renderCellModal(){
   $$("#cell-modal .ce").forEach(el=>el.onchange=()=>{
     const e=entries.find(x=>x.id===el.dataset.id);if(!e)return;
     const f=el.dataset.f;
-    if(f==="amount")e.amount=parseNum(el.value);else e[f]=el.value;
+    if(f==="amount")e.amount=parseNum(el.value);
+    else if(f==="fx")e.fx=parseNum(el.value);
+    else e[f]=el.value;
     save();renderDaily();refreshPjtList();
     if(f==="plan")setTimeout(renderCellModal,0);
   });
@@ -1234,10 +1255,10 @@ $("#s-save").onclick=()=>{
   alert("저장했습니다.");
 };
 $("#s-export").onclick=()=>{
-  const head=["일자","국내외","구분","상세구분","PJT","전망실적","금액","메모"];
+  const head=["일자","국내외","구분","상세구분","PJT","전망실적","금액","메모","회입환율"];
   const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
   const csv=[head.join(",")].concat(entries.map(e=>
-    [e.date,e.region||"국내",e.type,e.category,e.project,e.plan,e.amount,e.memo].map(q).join(","))).join("\r\n");
+    [e.date,e.region||"국내",e.type,e.category,e.project,e.plan,e.amount,e.memo,e.fx||""].map(q).join(","))).join("\r\n");
   const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_"+isoToday()+".csv";a.click();
@@ -1264,7 +1285,8 @@ $("#s-restore").onchange=e=>{
       id:x.id||uid(),date:String(x.date),region:x.region==="해외"?"해외":"국내",
       type:x.type==="지출"?"지출":"수금",
       category:String(x.category||"기타"),project:String(x.project||""),
-      plan:x.plan==="실적"?"실적":"전망",amount:Number(x.amount)||0,memo:String(x.memo||"")}));
+      plan:x.plan==="실적"?"실적":"전망",amount:Number(x.amount)||0,memo:String(x.memo||""),
+      ...(x.fx?{fx:Number(x.fx)}:{})}));
     if(snap.settings&&typeof snap.settings==="object"){
       const s=snap.settings;
       settings={baseDate:s.baseDate||isoToday(),baseBalance:Number(s.baseBalance)||0,
@@ -1408,13 +1430,15 @@ function parseCsv(text){
   if(field.length||row.length){row.push(field);rows.push(row);}
   const out=[],hasR=(rows[0]||[])[1]&&String(rows[0][1]).includes("국내");
   for(let k=1;k<rows.length;k++){const r=rows[k];if(!r[0])continue;
-    const c=hasR?{reg:r[1],t:r[2],cat:r[3],pjt:r[4],pl:r[5],amt:r[6],memo:r[7]}
-                :{reg:"국내",t:r[1],cat:r[2],pjt:r[3],pl:r[4],amt:r[5],memo:r[6]};
+    const c=hasR?{reg:r[1],t:r[2],cat:r[3],pjt:r[4],pl:r[5],amt:r[6],memo:r[7],fx:r[8]}
+                :{reg:"국내",t:r[1],cat:r[2],pjt:r[3],pl:r[4],amt:r[5],memo:r[6],fx:r[7]};
     if(c.t==null)continue;
-    out.push({id:uid(),date:r[0].trim(),region:String(c.reg).trim()==="해외"?"해외":"국내",
+    const o={id:uid(),date:r[0].trim(),region:String(c.reg).trim()==="해외"?"해외":"국내",
       type:String(c.t).trim()==="지출"?"지출":"수금",category:String(c.cat||"").trim(),
       project:String(c.pjt||"").trim(),plan:String(c.pl).trim()==="실적"?"실적":"전망",
-      amount:parseNum(c.amt),memo:String(c.memo||"").trim()});}
+      amount:parseNum(c.amt),memo:String(c.memo||"").trim()};
+    if(c.fx&&parseNum(c.fx))o.fx=parseNum(c.fx);
+    out.push(o);}
   return out;
 }
 $("#s-clear").onclick=()=>{if(confirm("모든 데이터를 삭제할까요? 되돌릴 수 없습니다."))
@@ -1434,9 +1458,9 @@ $("#s-sample").onclick=()=>{
     ["해외",d(3),"수금","단독 입금","","실적",20,"베트남 기성 $20M"],
     ["해외",d(3),"지출","업체 대금 지급","","실적",8,""],
     ["해외",d(5),"수금","JV입금","","전망",15,"JV 정산"],
-    ["해외",d(3),"지출","국내 회입(시재 회수)","","전망",10,"본사 회수 $10M"],
+    ["해외",d(3),"지출","국내 회입(시재 회수)","","전망",10,"본사 회수 $10M",1320],
   ];
-  s.forEach(r=>entries.push({id:uid(),region:r[0],date:r[1],type:r[2],category:r[3],project:r[4],plan:r[5],amount:r[6],memo:r[7]}));
+  s.forEach(r=>entries.push({id:uid(),region:r[0],date:r[1],type:r[2],category:r[3],project:r[4],plan:r[5],amount:r[6],memo:r[7],...(r[8]?{fx:r[8]}:{})}));
   if(!settings.baseBalance){settings.baseDate=d(1);settings.baseBalance=50000;}
   if(!settings.ovBaseBalance)settings.ovBaseBalance=200;
   if(!settings.naeBase)settings.naeBase=8000;
