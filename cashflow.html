@@ -78,11 +78,16 @@
   .g-title h3{margin:0;font-size:18px;font-weight:800;letter-spacing:1px}
   .g-title .d{color:var(--muted);font-size:12.5px}
   .g-unit{text-align:right;font-size:11.5px;color:var(--muted);margin-bottom:4px}
-  table.gapji{border:1px solid #b8c2d0;font-size:12.5px;table-layout:fixed}
+  table.gapji{border:1px solid #b8c2d0;font-size:12.5px;table-layout:fixed;width:auto}
   table.gapji th{position:relative}
   table.gapji td{overflow:hidden;text-overflow:ellipsis}
-  .colrs{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;user-select:none;z-index:5}
+  .colrs{position:absolute;top:0;right:0;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:5}
   .colrs:hover{background:#7ba7d4}
+  table.rztbl{table-layout:fixed;width:auto}
+  table.rztbl th{position:relative}
+  table.rztbl td{overflow:hidden}
+  table.rztbl td.memo{overflow:visible}
+  table.rztbl .fc-note{width:100%}
   #g-ov-bar{margin-top:22px;cursor:pointer;background:#eef1f6;border:1px solid var(--line);border-radius:8px;
     padding:9px 14px;font-weight:800;color:#33445a;user-select:none}
   #g-ov-bar:hover{background:#e6ebf3}
@@ -514,6 +519,7 @@ const GAPJI_OV={
 };
 const REPAT="국내 회입(시재 회수)"; // 해외 시재 회수 → 국내 연결법인 시재 회입
 const GAPJI_W=[190,92,70,70,88,210,84,210]; // 갑지 열 기본 너비(px)
+const FCW=[112,90,90,90,110,360]; // 10영업일 전망 열 기본 너비(px)
 
 const KEY_M="jsuji_manual_v1";
 let entries=load(KEY_E,[]);
@@ -528,6 +534,7 @@ if(settings.naeBase==null)settings.naeBase=0;
 if(!settings.gapjiW||typeof settings.gapjiW!=="object")settings.gapjiW={};
 if(settings.ovCollapsed==null)settings.ovCollapsed=true;
 if(!settings.fcNotes||typeof settings.fcNotes!=="object")settings.fcNotes={};
+if(!settings.fcW||typeof settings.fcW!=="object")settings.fcW={};
 if(!settings.ytdBase)settings.ytdBase={국내:{},해외:{}};
 if(!settings.ytdBase.국내)settings.ytdBase.국내={};
 if(!settings.ytdBase.해외)settings.ytdBase.해외={};
@@ -842,7 +849,7 @@ function gapjiHtml(D,region){
     </div>
     <p class="note">전일=직전 영업일(${g.prev}). 계획=전망, 실적=실적. ‘차이’ 칸은 계획대비 주요 사항을 직접 적는 곳이며, ‘내용’ 칸도 수기 입력할 수 있습니다(입금 내용은 큰 건 2개 자동).</p>`;
   }
-  const rs=i=>`<div class="colrs" data-col="${i}"></div>`;
+  const rs=i=>`<div class="colrs" data-col="${i}" data-w="gapjiW"></div>`;
   return `<div class="g-title"><h3>${title}</h3><div class="d">${D}${ov?" · 해외":""}</div></div>
     <div class="g-unit">(${unit})</div>
     <div style="overflow:auto"><table class="gapji">
@@ -946,6 +953,7 @@ function miniLine(vals){
 }
 function forecastHtml(D){
   const f=forecastCalc(D,10),warn=f.min<0;
+  const rz=i=>`<div class="colrs" data-col="${i}" data-w="fcW"></div>`;
   const kpi=(l,v,c)=>`<div class="kpi"><div class="lbl">${l}</div><div class="val num ${c||''}">${v}</div></div>`;
   const body=f.rows.map(r=>`<tr${r.bal<0?' style="background:#fdecea"':''}>
       <td class="lft">${r.iso.slice(5)} (${r.dow})</td>
@@ -963,8 +971,9 @@ function forecastHtml(D){
     </div>
     ${warn?`<p class="note" style="color:#c0392b;font-weight:700">⚠ ${f.minDay.slice(5)}에 예상 시재가 마이너스입니다. 자금 조달·집행 조정이 필요합니다.</p>`:""}
     <div class="card" style="box-shadow:none;background:#fbfcfe"><h2 style="font-size:13px">예상 시재 추이 (10영업일)</h2>${miniLine(f.rows.map(r=>r.bal))}</div>
-    <div style="overflow:auto"><table>
-      <thead><tr><th class="lft">일자(요일)</th><th>입금</th><th>지출</th><th>순증감</th><th>예상 시재</th><th class="lft">주요 내역 <span class="sub" style="font-weight:400">(수기 수정)</span></th></tr></thead>
+    <div style="overflow:auto"><table class="rztbl">
+      <colgroup>${FCW.map((d,i)=>`<col style="width:${(settings.fcW[i]||d)}px">`).join("")}</colgroup>
+      <thead><tr><th class="lft">일자(요일)${rz(0)}</th><th>입금${rz(1)}</th><th>지출${rz(2)}</th><th>순증감${rz(3)}</th><th>예상 시재${rz(4)}</th><th class="lft">주요 내역 <span class="sub" style="font-weight:400">(수기 수정)</span>${rz(5)}</th></tr></thead>
       <tbody>${body}
       <tr class="row-tot"><td class="lft">합계</td><td class="num in">${fmt(f.ti)}</td>
         <td class="num out">${fmt(f.to)}</td><td class="num">${fmt(f.ti-f.to)}</td>
@@ -984,14 +993,14 @@ function applyOvCollapse(){
 }
 $("#g-ov-bar").onclick=()=>{settings.ovCollapsed=!settings.ovCollapsed;save();renderReports();};
 function wireGapjiResizers(){
-  $$("#g-report .colrs,#g-overseas .colrs").forEach(h=>{
+  $$("#g-report .colrs,#g-overseas .colrs,#g-forecast .colrs").forEach(h=>{
     h.onmousedown=ev=>{
       ev.preventDefault();ev.stopPropagation();
-      const table=h.closest("table"),i=+h.dataset.col;
+      const table=h.closest("table"),i=+h.dataset.col,store=h.dataset.w||"gapjiW";
       const col=table.querySelectorAll("colgroup col")[i];
       const startX=ev.clientX,startW=col.getBoundingClientRect().width;
       const move=e=>{const w=Math.max(40,Math.round(startW+(e.clientX-startX)));
-        col.style.width=w+"px";settings.gapjiW[i]=w;};
+        col.style.width=w+"px";settings[store][i]=w;};
       const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);
         document.body.style.cursor="";save();};
       document.body.style.cursor="col-resize";
@@ -999,7 +1008,7 @@ function wireGapjiResizers(){
     };
   });
 }
-$("#g-wreset").onclick=()=>{settings.gapjiW={};save();renderReports();};
+$("#g-wreset").onclick=()=>{settings.gapjiW={};settings.fcW={};save();renderReports();};
 /* 갑지 화면 그대로 PNG 캡쳐 (라이브러리 없이 SVG foreignObject) */
 function cloneForCapture(node){
   const clone=node.cloneNode(true);
@@ -1425,6 +1434,7 @@ $("#s-restore").onchange=e=>{
         projects:Array.isArray(s.projects)?s.projects.slice():[],
         gapjiW:(s.gapjiW&&typeof s.gapjiW==="object")?s.gapjiW:{},ovCollapsed:s.ovCollapsed!==false,
         fcNotes:(s.fcNotes&&typeof s.fcNotes==="object")?s.fcNotes:{},
+        fcW:(s.fcW&&typeof s.fcW==="object")?s.fcW:{},
         ytdBase:(s.ytdBase&&typeof s.ytdBase==="object")?{국내:s.ytdBase.국내||{},해외:s.ytdBase.해외||{}}:{국내:{},해외:{}}};
     }
     manual=(snap.manual&&typeof snap.manual==="object")?snap.manual:{};
