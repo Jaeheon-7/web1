@@ -1051,7 +1051,7 @@ function renderCellModal(){
       <td>${catCell}</td>${pjtCell}
       <td><input class="ce num" data-f="amount" data-id="${e.id}" value="${fmt(e.amount)}" style="width:88px"></td>
       <td><input class="ce" data-f="memo" data-id="${e.id}" value="${esc(e.memo)}" style="width:150px"></td>
-      <td style="white-space:nowrap">${e.plan==="전망"?`<button class="btn sm" data-toreal="${e.id}" style="background:#1a7f5a;color:#fff" title="전망을 실적으로 복사">→실적</button> `:""}<button class="btn danger sm" data-cdel="${e.id}">삭제</button></td></tr>`;
+      <td style="white-space:nowrap">${e.plan==="전망"?`<button class="btn sm" data-toreal="${e.id}" style="background:#1a7f5a;color:#fff" title="전망은 그대로 두고 실적을 복사 생성">실적복사</button> <button class="btn sm" data-conv="${e.id}" style="background:#2f6fb0;color:#fff" title="이 전망을 실적으로 전환(전망 삭제)">실적전환</button> `:""}<button class="btn danger sm" data-cdel="${e.id}">삭제</button></td></tr>`;
   };
   $("#cell-modal .modal").innerHTML=`
     <div class="flex" style="margin-bottom:10px">
@@ -1064,7 +1064,7 @@ function renderCellModal(){
       <button class="btn sm" id="cell-add-plan">＋ 전망 추가</button>
       <button class="btn sm" id="cell-add-real" style="background:#1a7f5a;color:#fff">＋ 실적 추가</button>
     </div>
-    <p class="note">‘→실적’은 전망을 복사해 실적을 만듭니다(전망 유지). 실제 금액만 고치면 됩니다.${c.label.includes("연결법인")?" 해외 시재 회수 환산분은 해외 현황판에서 관리하세요.":""}</p>`;
+    <p class="note">‘실적복사’=전망 유지 + 실적 생성(계획·실적 비교용) · ‘실적전환’=전망을 실적으로 바꿈(전망 삭제). 실제 금액만 고치면 됩니다.${c.label.includes("연결법인")?" 해외 시재 회수 환산분은 해외 현황판에서 관리하세요.":""}</p>`;
   $("#cell-close").onclick=closeCellModal;
   const addEntry=plan=>{entries.push({id:uid(),date:c.iso,region:c.region,type:c.type,category:c.cats[0],
     project:pjtOn?(settings.projects[0]||""):"",plan,amount:0,memo:""});
@@ -1076,6 +1076,9 @@ function renderCellModal(){
     entries.push({id:uid(),date:e.date,region:e.region,type:e.type,category:e.category,
       project:e.project,plan:"실적",amount:e.amount,memo:e.memo});
     save();renderCellModal();renderDaily();});
+  $$("#cell-modal [data-conv]").forEach(b=>b.onclick=()=>{
+    const e=entries.find(x=>x.id===b.dataset.conv);if(!e)return;
+    e.plan="실적";save();renderCellModal();renderDaily();});
   $$("#cell-modal [data-cdel]").forEach(b=>b.onclick=()=>{
     entries=entries.filter(x=>x.id!==b.dataset.cdel);save();renderCellModal();renderDaily();refreshPjtList();});
   $$("#cell-modal .ce").forEach(el=>el.onchange=()=>{
