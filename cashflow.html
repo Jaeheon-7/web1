@@ -258,6 +258,7 @@
           </select>
           <button class="btn sec sm" id="daily-next">다음 ▶</button>
           <button class="btn sec sm" id="daily-xlsx">엑셀</button>
+          <button class="btn sec sm" id="daily-raw" title="전체 입력내역 원본(중복 제거)">Raw 엑셀</button>
         </div>
       </div>
       <div id="daily-board" style="overflow:auto"></div>
@@ -949,8 +950,8 @@ function forecastCalc(D,n){
   });
   return {days,rows,startBal,ti,to,min,minDay};
 }
-function miniLine(vals){
-  const W=920,H=150,pad={l:66,r:12,t:12,b:22};
+function miniLine(vals,labels){
+  const W=920,H=168,pad={l:66,r:12,t:12,b:40};
   let mn=Math.min(...vals,0),mx=Math.max(...vals,1);if(mn===mx)mx=mn+1;
   const px=i=>pad.l+(W-pad.l-pad.r)*(i/(vals.length-1||1));
   const py=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
@@ -958,9 +959,13 @@ function miniLine(vals){
   let g="";for(let k=0;k<=3;k++){const v=mn+(mx-mn)*k/3,y=py(v);
     g+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eef1f6"/><text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#98a2b3">${fmt(v)}</text>`;}
   const dots=vals.map((v,i)=>`<circle cx="${px(i)}" cy="${py(v)}" r="2.6" fill="${v<0?'#c0392b':'#2f6fb0'}"/>`).join("");
+  let xl="";if(labels)labels.forEach((lb,i)=>{const x=px(i);
+    xl+=`<line x1="${x}" y1="${py(mn)}" x2="${x}" y2="${py(mn)+4}" stroke="#cbd3df"/>`+
+        `<text x="${x}" y="${H-16}" text-anchor="middle" font-size="10" fill="#6b7688">${esc(lb.d)}</text>`+
+        `<text x="${x}" y="${H-4}" text-anchor="middle" font-size="9" fill="#98a2b3">${esc(lb.w)}</text>`;});
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto">${g}`+
     (mn<0?`<line x1="${pad.l}" y1="${py(0)}" x2="${W-pad.r}" y2="${py(0)}" stroke="#c0392b" stroke-dasharray="3 3"/>`:"")+
-    `<polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>${dots}</svg>`;
+    `<polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>${dots}${xl}</svg>`;
 }
 function forecastHtml(D){
   const f=forecastCalc(D,10),warn=f.min<0;
@@ -982,7 +987,7 @@ function forecastHtml(D){
       ${kpi("최저 예상 시재",fmt(f.min)+(f.minDay?" ("+f.minDay.slice(5)+")":""),warn?"out":"")}
     </div>
     ${warn?`<p class="note" style="color:#c0392b;font-weight:700">⚠ ${f.minDay.slice(5)}에 예상 시재가 마이너스입니다. 자금 조달·집행 조정이 필요합니다.</p>`:""}
-    <div class="card" style="box-shadow:none;background:#fbfcfe"><h2 style="font-size:13px">예상 시재 추이 (10영업일)</h2>${miniLine(f.rows.map(r=>r.bal))}</div>
+    <div class="card" style="box-shadow:none;background:#fbfcfe"><h2 style="font-size:13px">예상 시재 추이 (10영업일)</h2>${miniLine(f.rows.map(r=>r.bal),f.rows.map(r=>({d:r.iso.slice(5),w:r.dow})))}</div>
     <div style="overflow:auto"><table class="rztbl">
       <colgroup>${FCW.map((d,i)=>`<col style="width:${(settings.fcW[i]||d)}px">`).join("")}</colgroup>
       <thead><tr><th class="lft">일자(요일)${rz(0)}</th><th>입금${rz(1)}</th><th>지출${rz(2)}</th><th>순증감${rz(3)}</th><th>예상 시재${rz(4)}</th><th class="lft">주요 내역 <span class="sub" style="font-weight:400">(수기 수정)</span>${rz(5)}</th></tr></thead>
@@ -1181,6 +1186,27 @@ $("#daily-xlsx").onclick=()=>{
   const blob=buildXlsx([{name:"일별현황판",rows:dailyRows()}]);
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
   a.download="자금수지_일별현황_"+($("#daily-start").value||isoToday())+".xlsx";a.click();
+};
+function rawRows(){
+  const seen=new Set(),rows=[["일자","국내외","구분","상세구분","PJT","전망/실적","금액","회입환율(원/USD)","해외 환산(억원)","메모"]];
+  let dup=0;
+  [...entries].sort((a,b)=>a.date.localeCompare(b.date)||(a.region||"").localeCompare(b.region||"")||
+      a.type.localeCompare(b.type)||String(a.category).localeCompare(String(b.category))||String(a.id).localeCompare(String(b.id)))
+    .forEach(e=>{
+      const sig=[e.date,e.region,e.type,e.category,e.project,e.plan,e.amount,e.memo,e.fx||""].join("§");
+      if(seen.has(sig)){dup++;return;}seen.add(sig);
+      const conv=(e.region==="해외"&&e.category===REPAT)?usdToUk(e.amount,e.fx):"";
+      rows.push([e.date,e.region||"국내",e.type,e.category,e.project||"",e.plan,e.amount,e.fx||"",conv,e.memo||""]);
+    });
+  return {rows,dup,count:rows.length-1};
+}
+$("#daily-raw").onclick=()=>{
+  if(!entries.length){alert("내역이 없습니다.");return;}
+  const {rows,dup,count}=rawRows();
+  const blob=buildXlsx([{name:"Raw 데이터",rows}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_Raw_"+isoToday()+".xlsx";a.click();
+  if(dup)setTimeout(()=>alert(`${count}건 저장(중복 ${dup}건 제외).`),100);
 };
 {const d=new Date();d.setDate(d.getDate()-2);$("#daily-start").value=fmtDate(d);}
 
