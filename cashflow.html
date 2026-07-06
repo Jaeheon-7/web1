@@ -527,6 +527,7 @@ if(settings.ytdBaseDate==null)settings.ytdBaseDate="2026-07-01";
 if(settings.naeBase==null)settings.naeBase=0;
 if(!settings.gapjiW||typeof settings.gapjiW!=="object")settings.gapjiW={};
 if(settings.ovCollapsed==null)settings.ovCollapsed=true;
+if(!settings.fcNotes||typeof settings.fcNotes!=="object")settings.fcNotes={};
 if(!settings.ytdBase)settings.ytdBase={국내:{},해외:{}};
 if(!settings.ytdBase.국내)settings.ytdBase.국내={};
 if(!settings.ytdBase.해외)settings.ytdBase.해외={};
@@ -871,6 +872,13 @@ document.addEventListener("change",ev=>{
   else m.note[label]=el.value;
   saveM();setTimeout(renderReports,0);
 });
+/* 전망 주요 내역 수기 수정 */
+document.addEventListener("change",ev=>{
+  const el=ev.target;if(!el.classList||!el.classList.contains("fc-note"))return;
+  const iso=el.dataset.iso,v=el.value;
+  if(v.trim()==="")delete settings.fcNotes[iso];else settings.fcNotes[iso]=v;
+  save();
+});
 /* '26년 실적 기초값 입력 */
 document.addEventListener("change",ev=>{
   const el=ev.target;if(!el.classList||!el.classList.contains("g-ytd"))return;
@@ -915,7 +923,11 @@ function forecastCalc(D,n){
     const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
     const bal=naeRun(x.iso);
     ti+=i;to+=o;if(bal<min){min=bal;minDay=x.iso;}
-    return {iso:x.iso,dow:x.dow,i,o,net:i-o,bal};
+    // 주요 내역: 큰 건 1~2개 (수기 수정 가능)
+    const auto=de.slice().sort((a,b)=>b.amount-a.amount).slice(0,2)
+      .map(e=>`${e.memo||e.project||e.category}_${fmt(e.type==="지출"?-e.amount:e.amount)}`).join(", ");
+    const note=(x.iso in settings.fcNotes)?settings.fcNotes[x.iso]:auto;
+    return {iso:x.iso,dow:x.dow,i,o,net:i-o,bal,note};
   });
   return {days,rows,startBal,ti,to,min,minDay};
 }
@@ -940,7 +952,8 @@ function forecastHtml(D){
       <td class="num in">${r.i?fmt(r.i):"-"}</td>
       <td class="num out">${r.o?fmt(r.o):"-"}</td>
       <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
-      <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td></tr>`).join("");
+      <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td>
+      <td class="memo"><input class="fc-note g-edit lft" data-iso="${r.iso}" value="${esc(r.note)}" placeholder=""></td></tr>`).join("");
   return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small></h2>
     <div class="kpis">
       ${kpi("기준 시재",fmt(f.startBal))}
@@ -951,11 +964,11 @@ function forecastHtml(D){
     ${warn?`<p class="note" style="color:#c0392b;font-weight:700">⚠ ${f.minDay.slice(5)}에 예상 시재가 마이너스입니다. 자금 조달·집행 조정이 필요합니다.</p>`:""}
     <div class="card" style="box-shadow:none;background:#fbfcfe"><h2 style="font-size:13px">예상 시재 추이 (10영업일)</h2>${miniLine(f.rows.map(r=>r.bal))}</div>
     <div style="overflow:auto"><table>
-      <thead><tr><th class="lft">일자(요일)</th><th>입금</th><th>지출</th><th>순증감</th><th>예상 시재</th></tr></thead>
+      <thead><tr><th class="lft">일자(요일)</th><th>입금</th><th>지출</th><th>순증감</th><th>예상 시재</th><th class="lft">주요 내역 <span class="sub" style="font-weight:400">(수기 수정)</span></th></tr></thead>
       <tbody>${body}
       <tr class="row-tot"><td class="lft">합계</td><td class="num in">${fmt(f.ti)}</td>
         <td class="num out">${fmt(f.to)}</td><td class="num">${fmt(f.ti-f.to)}</td>
-        <td class="num">${fmt(f.rows.length?f.rows[f.rows.length-1].bal:f.startBal)}</td></tr></tbody></table></div>`;
+        <td class="num">${fmt(f.rows.length?f.rows[f.rows.length-1].bal:f.startBal)}</td><td class="memo"></td></tr></tbody></table></div>`;
 }
 function renderReports(){
   const D=$("#g-date").value||isoToday();
@@ -1044,11 +1057,11 @@ $("#g-capture").onclick=()=>{
 function renderGapji(){renderReports();renderYtdPanel();}
 $("#g-print").onclick=()=>window.print();
 function forecastRows(D){
-  const f=forecastCalc(D,10),rows=[["향후 10영업일 자금 전망 (기준일 "+D+")","","","",""]];
-  rows.push(["일자","요일","입금(계획)","지출(계획)","순증감","예상 시재"]);
-  rows.push(["기준 시재","","","","",f.startBal]);
-  f.rows.forEach(r=>rows.push([r.iso,r.dow,r.i,r.o,r.net,r.bal]));
-  rows.push(["합계","",f.ti,f.to,f.ti-f.to,f.rows.length?f.rows[f.rows.length-1].bal:f.startBal]);
+  const f=forecastCalc(D,10),rows=[["향후 10영업일 자금 전망 (기준일 "+D+")","","","","",""]];
+  rows.push(["일자","요일","입금(계획)","지출(계획)","순증감","예상 시재","주요 내역"]);
+  rows.push(["기준 시재","","","","",f.startBal,""]);
+  f.rows.forEach(r=>rows.push([r.iso,r.dow,r.i,r.o,r.net,r.bal,r.note]));
+  rows.push(["합계","",f.ti,f.to,f.ti-f.to,f.rows.length?f.rows[f.rows.length-1].bal:f.startBal,""]);
   return rows;
 }
 function gapjiRows(D,region){
@@ -1411,6 +1424,7 @@ $("#s-restore").onchange=e=>{
         unitFixed:true,naeBase:Number(s.naeBase)||0,ytdBaseDate:s.ytdBaseDate||"2026-07-01",
         projects:Array.isArray(s.projects)?s.projects.slice():[],
         gapjiW:(s.gapjiW&&typeof s.gapjiW==="object")?s.gapjiW:{},ovCollapsed:s.ovCollapsed!==false,
+        fcNotes:(s.fcNotes&&typeof s.fcNotes==="object")?s.fcNotes:{},
         ytdBase:(s.ytdBase&&typeof s.ytdBase==="object")?{국내:s.ytdBase.국내||{},해외:s.ytdBase.해외||{}}:{국내:{},해외:{}}};
     }
     manual=(snap.manual&&typeof snap.manual==="object")?snap.manual:{};
