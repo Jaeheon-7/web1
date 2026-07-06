@@ -1066,7 +1066,7 @@ function renderCellModal(){
   const es=cellEntries();
   const row=e=>{
     const catCell=multiCat?`<select class="ce" data-f="category" data-id="${e.id}">${c.cats.map(x=>`<option${x===e.category?" selected":""}>${esc(x)}</option>`).join("")}</select>`:`<span class="mut">${esc(e.category)}</span>`;
-    const pjtCell=pjtOn?`<td><select class="ce" data-f="project" data-id="${e.id}">${(settings.projects||[]).map(x=>`<option${x===e.project?" selected":""}>${esc(x)}</option>`).join("")}${!settings.projects.includes(e.project)&&e.project?`<option selected>${esc(e.project)}</option>`:""}</select></td>`:"";
+    const pjtCell=pjtOn?`<td><select class="ce" data-f="project" data-id="${e.id}">${(settings.projects||[]).map(x=>`<option${x===e.project?" selected":""}>${esc(x)}</option>`).join("")}${!settings.projects.includes(e.project)&&e.project?`<option selected>${esc(e.project)}</option>`:""}<option value="__new__">＋ 새 PJT 등록…</option></select></td>`:"";
     const fxCell=fxOn?`<td><input class="ce num" data-f="fx" data-id="${e.id}" value="${e.fx?fmt(e.fx):fmt(settings.fx)}" style="width:66px" title="회입시점 환율(원/USD) → 국내 환산 ${fmt(usdToUk(e.amount,e.fx))}억"></td>`:"";
     return `<tr>
       <td><select class="ce" data-f="plan" data-id="${e.id}"><option${e.plan==="전망"?" selected":""}>전망</option><option${e.plan==="실적"?" selected":""}>실적</option></select></td>
@@ -1111,6 +1111,14 @@ function renderCellModal(){
     const f=el.dataset.f;
     if(f==="amount")e.amount=parseNum(el.value);
     else if(f==="fx")e.fx=parseNum(el.value);
+    else if(f==="project"){
+      if(el.value==="__new__"){
+        const name=(prompt("새 PJT 이름을 입력하세요 (예: 강동1)")||"").trim();
+        if(name){if(!settings.projects.includes(name)){settings.projects.push(name);
+          settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));renderPjtManage();}e.project=name;}
+      }else e.project=el.value;
+      save();renderDaily();fillPjtSelect();setTimeout(renderCellModal,0);return;
+    }
     else e[f]=el.value;
     save();renderDaily();refreshPjtList();
     if(f==="plan")setTimeout(renderCellModal,0);
