@@ -108,6 +108,7 @@
   .g-edit.lft{text-align:left}
   textarea.atxt{resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;line-height:1.35;min-height:20px;display:block;box-sizing:border-box}
   table.gapji td.memo{overflow:visible;white-space:normal;vertical-align:top}
+  table.pstbl td.pscell:hover{background:#eaf1f9;box-shadow:inset 0 0 0 2px #7ba7d4}
   /* ---- 일별 현황판 ---- */
   table.daily{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap}
   table.daily th,table.daily td{border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);padding:5px 9px;text-align:right}
@@ -161,6 +162,7 @@
     <button data-tab="board">일일 모판</button>
     <button data-tab="trend">월 추이</button>
     <button data-tab="pjt">PJT · 전망대비</button>
+    <button data-tab="pjtsu">PJT 수금실적</button>
     <button data-tab="settings">설정 · 백업</button>
   </div>
 
@@ -381,6 +383,28 @@
     </div>
   </section>
 
+  <!-- ============ PJT 수금실적 ============ -->
+  <section id="tab-pjtsu" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:10px">
+        <h2 style="margin:0">PJT 수금실적</h2>
+        <div class="right flex">
+          <select id="ps-basis" style="width:auto">
+            <option value="실적">실적</option>
+            <option value="전망">전망</option>
+            <option value="전체">전망+실적</option>
+          </select>
+          <input type="month" id="ps-month" style="width:auto">
+          <button class="btn sec sm" id="ps-all">전체기간</button>
+          <button class="btn sec sm" id="ps-xlsx">엑셀</button>
+        </div>
+      </div>
+      <p class="sub" id="ps-summary" style="margin:0 0 8px"></p>
+      <div id="ps-table" style="overflow:auto"></div>
+      <p class="note">셀을 클릭하면 그 PJT·항목의 개별 내역을 조회·수정할 수 있고(일별 현황판과 동일 데이터), 변경은 즉시 반영됩니다.</p>
+    </div>
+  </section>
+
   <!-- ============ SETTINGS ============ -->
   <section id="tab-settings" hidden>
     <div class="card">
@@ -552,6 +576,13 @@ if(!settings.projects)settings.projects=[];
 {const ps=[...new Set(entries.filter(e=>e.project).map(e=>e.project))];
  settings.projects=[...new Set([...settings.projects,...ps])].sort((a,b)=>a.localeCompare(b,"ko"));}
 const PJT_CATS=["공사수입(기성)","공사수입(분양금)","공동원가 회입","대여금 회입","사업비 차입"];
+// PJT 수금실적 화면 열 정의
+const PJT_SUGUM=[
+  {label:"공사 수입(기성, 분양금)",cats:["공사수입(기성)","공사수입(분양금)"]},
+  {label:"공동원가 회입",cats:["공동원가 회입"]},
+  {label:"받을어음 만기",cats:["받을어음 만기"]},
+  {label:"대여금 회입",cats:["대여금 회입"]},
+];
 let manual=load(KEY_M,{});         // manual[region][date]={diff:{label:num},note:{label:str}}
 let form={region:"국내",type:"수금",plan:"전망"};
 let editingId=null;
@@ -582,12 +613,13 @@ function signed(e){return e.type==="수금"?e.amount:-e.amount;}
 /* ---------- tabs ---------- */
 $$(".tabs button").forEach(b=>b.onclick=()=>{
   $$(".tabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
-  ["input","gapji","daily","board","trend","pjt","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
+  ["input","gapji","daily","board","trend","pjt","pjtsu","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
   if(b.dataset.tab==="gapji")renderGapji();
   if(b.dataset.tab==="daily")renderDaily();
   if(b.dataset.tab==="board")renderBoard();
   if(b.dataset.tab==="trend")renderTrend();
   if(b.dataset.tab==="pjt")renderPjt();
+  if(b.dataset.tab==="pjtsu")renderPjtSugum();
   if(b.dataset.tab==="settings")renderPjtManage();
 });
 
@@ -1212,52 +1244,59 @@ $("#daily-raw").onclick=()=>{
 
 /* ----- 셀 상세 내역 모달 (조회·수정·전망→실적) ----- */
 let cellCtx=null;
+function openCell(ctx){cellCtx=ctx;$("#cell-modal").hidden=false;renderCellModal();}
+function syncEntryViews(){renderDaily();renderPjtSugum();}
 $("#daily-board").onclick=ev=>{
   const td=ev.target.closest(".cellc");if(!td)return;
   const region=$("#daily-region").value,ov=region==="해외",defs=ov?GAPJI_OV:GAPJI;
   const type=td.dataset.t,blk=type==="수금"?defs.입금:defs.지출,line=blk[+td.dataset.li];
   if(!line)return;
-  cellCtx={region,label:line.label,cats:line.cats,type,iso:td.dataset.iso};
-  $("#cell-modal").hidden=false;renderCellModal();
+  openCell({region,label:line.label,cats:line.cats,type,iso:td.dataset.iso});
 };
 $("#cell-modal").onclick=ev=>{if(ev.target.id==="cell-modal")closeCellModal();};
 function closeCellModal(){$("#cell-modal").hidden=true;cellCtx=null;}
 function cellEntries(){const c=cellCtx;
-  return entries.filter(e=>e.region===c.region&&e.type===c.type&&c.cats.includes(e.category)&&e.date===c.iso)
-    .sort((a,b)=>b.plan.localeCompare(a.plan)||a.id.localeCompare(b.id));} // 전망 먼저
+  return entries.filter(e=>e.region===c.region&&e.type===c.type&&c.cats.includes(e.category)
+    &&(c.iso?e.date===c.iso:true)
+    &&(c.project?(e.project||"(미지정)")===c.project:true)
+    &&(c.ym?e.date.slice(0,7)===c.ym:true))
+    .sort((a,b)=>a.date.localeCompare(b.date)||b.plan.localeCompare(a.plan)||String(a.id).localeCompare(String(b.id)));}
 function renderCellModal(){
   const c=cellCtx,ov=c.region==="해외",unit=ov?"백만USD":settings.unit;
   const multiCat=c.cats.length>1,pjtOn=(!ov&&c.type==="수금"&&PJT_CATS.includes(c.cats[0]));
   const fxOn=(c.region==="해외"&&c.type==="지출"&&c.cats.includes(REPAT));
+  const multiDate=!c.iso;
   const es=cellEntries();
   const row=e=>{
+    const dateCell=multiDate?`<td><input class="ce" type="date" data-f="date" data-id="${e.id}" value="${e.date}" style="width:132px"></td>`:"";
     const catCell=multiCat?`<select class="ce" data-f="category" data-id="${e.id}">${c.cats.map(x=>`<option${x===e.category?" selected":""}>${esc(x)}</option>`).join("")}</select>`:`<span class="mut">${esc(e.category)}</span>`;
-    const pjtCell=pjtOn?`<td><select class="ce" data-f="project" data-id="${e.id}">${(settings.projects||[]).map(x=>`<option${x===e.project?" selected":""}>${esc(x)}</option>`).join("")}${!settings.projects.includes(e.project)&&e.project?`<option selected>${esc(e.project)}</option>`:""}<option value="__new__">＋ 새 PJT 등록…</option></select></td>`:"";
+    const pjtCell=(pjtOn&&!c.project)?`<td><select class="ce" data-f="project" data-id="${e.id}">${(settings.projects||[]).map(x=>`<option${x===e.project?" selected":""}>${esc(x)}</option>`).join("")}${!settings.projects.includes(e.project)&&e.project?`<option selected>${esc(e.project)}</option>`:""}<option value="__new__">＋ 새 PJT 등록…</option></select></td>`:"";
     const fxCell=fxOn?`<td><input class="ce num" data-f="fx" data-id="${e.id}" value="${e.fx?fmt(e.fx):fmt(settings.fx)}" style="width:66px" title="회입시점 환율(원/USD) → 국내 환산 ${fmt(usdToUk(e.amount,e.fx))}억"></td>`:"";
-    return `<tr>
+    return `<tr>${dateCell}
       <td><select class="ce" data-f="plan" data-id="${e.id}"><option${e.plan==="전망"?" selected":""}>전망</option><option${e.plan==="실적"?" selected":""}>실적</option></select></td>
       <td>${catCell}</td>${pjtCell}
       <td><input class="ce num" data-f="amount" data-id="${e.id}" value="${fmt(e.amount)}" style="width:88px"></td>${fxCell}
       <td><input class="ce" data-f="memo" data-id="${e.id}" value="${esc(e.memo)}" style="width:150px"></td>
       <td style="white-space:nowrap">${e.plan==="전망"?`<button class="btn sm" data-toreal="${e.id}" style="background:#1a7f5a;color:#fff" title="전망은 그대로 두고 실적을 복사 생성">실적복사</button> <button class="btn sm" data-conv="${e.id}" style="background:#2f6fb0;color:#fff" title="이 전망을 실적으로 전환(전망 삭제)">실적전환</button> `:""}<button class="btn danger sm" data-cdel="${e.id}">삭제</button></td></tr>`;
   };
+  const title=c.iso?`${c.iso} · ${esc(c.label)}`:`${esc(c.project||"")} · ${esc(c.label)} · ${c.ym||"전체기간"}`;
   $("#cell-modal .modal").innerHTML=`
     <div class="flex" style="margin-bottom:10px">
-      <strong style="font-size:14px">${c.iso} · ${esc(c.label)} · <span class="${c.type==="수금"?"in":"out"}">${c.type}</span>${ov?" (USD)":""}</strong>
+      <strong style="font-size:14px">${title} · <span class="${c.type==="수금"?"in":"out"}">${c.type}</span>${ov?" (USD)":""}</strong>
       <button class="btn sec sm right" id="cell-close">닫기</button>
     </div>
-    <table class="ce-tbl"><thead><tr><th>구분</th><th>상세</th>${pjtOn?"<th>PJT</th>":""}<th>금액(${esc(unit)})</th>${fxOn?"<th>환율(원/$)</th>":""}<th>메모</th><th></th></tr></thead>
-    <tbody>${es.length?es.map(row).join(""):`<tr><td colspan="7" class="empty">내역이 없습니다. 아래에서 추가하세요.</td></tr>`}</tbody></table>
+    <table class="ce-tbl"><thead><tr>${multiDate?"<th>일자</th>":""}<th>구분</th><th>상세</th>${pjtOn&&!c.project?"<th>PJT</th>":""}<th>금액(${esc(unit)})</th>${fxOn?"<th>환율(원/$)</th>":""}<th>메모</th><th></th></tr></thead>
+    <tbody>${es.length?es.map(row).join(""):`<tr><td colspan="9" class="empty">내역이 없습니다. 아래에서 추가하세요.</td></tr>`}</tbody></table>
     <div style="margin-top:10px;display:flex;gap:8px">
       <button class="btn sm" id="cell-add-plan">＋ 전망 추가</button>
       <button class="btn sm" id="cell-add-real" style="background:#1a7f5a;color:#fff">＋ 실적 추가</button>
     </div>
     <p class="note">‘실적복사’=전망 유지 + 실적 생성(계획·실적 비교용) · ‘실적전환’=전망을 실적으로 바꿈(전망 삭제). 실제 금액만 고치면 됩니다.${c.label.includes("연결법인")?" 해외 시재 회수 환산분은 해외 현황판에서 관리하세요.":""}</p>`;
   $("#cell-close").onclick=closeCellModal;
-  const addEntry=plan=>{const ne={id:uid(),date:c.iso,region:c.region,type:c.type,category:c.cats[0],
-    project:pjtOn?(settings.projects[0]||""):"",plan,amount:0,memo:""};
+  const addEntry=plan=>{const ne={id:uid(),date:c.iso||(c.ym?c.ym+"-01":isoToday()),region:c.region,type:c.type,category:c.cats[0],
+    project:(c.project&&c.project!=="(미지정)")?c.project:(pjtOn?(settings.projects[0]||""):""),plan,amount:0,memo:""};
     if(fxOn)ne.fx=Number(settings.fx);entries.push(ne);
-    save();renderCellModal();renderDaily();};
+    save();renderCellModal();syncEntryViews();};
   $("#cell-add-plan").onclick=()=>addEntry("전망");
   $("#cell-add-real").onclick=()=>addEntry("실적");
   $$("#cell-modal [data-toreal]").forEach(b=>b.onclick=()=>{
@@ -1265,13 +1304,13 @@ function renderCellModal(){
     const ne={id:uid(),date:e.date,region:e.region,type:e.type,category:e.category,
       project:e.project,plan:"실적",amount:e.amount,memo:e.memo};
     if(e.fx)ne.fx=e.fx;entries.push(ne);
-    save();renderCellModal();renderDaily();});
+    save();renderCellModal();syncEntryViews();});
   $$("#cell-modal [data-conv]").forEach(b=>b.onclick=()=>{
     const e=entries.find(x=>x.id===b.dataset.conv);if(!e)return;
     if(!confirm(`이 전망(${fmt(e.amount)})을 실적으로 전환할까요?\n전망 내역은 사라집니다.`))return;
-    e.plan="실적";save();renderCellModal();renderDaily();});
+    e.plan="실적";save();renderCellModal();syncEntryViews();});
   $$("#cell-modal [data-cdel]").forEach(b=>b.onclick=()=>{
-    entries=entries.filter(x=>x.id!==b.dataset.cdel);save();renderCellModal();renderDaily();refreshPjtList();});
+    entries=entries.filter(x=>x.id!==b.dataset.cdel);save();renderCellModal();syncEntryViews();refreshPjtList();});
   $$("#cell-modal .ce").forEach(el=>el.onchange=()=>{
     const e=entries.find(x=>x.id===el.dataset.id);if(!e)return;
     const f=el.dataset.f;
@@ -1283,11 +1322,11 @@ function renderCellModal(){
         if(name){if(!settings.projects.includes(name)){settings.projects.push(name);
           settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));renderPjtManage();}e.project=name;}
       }else e.project=el.value;
-      save();renderDaily();fillPjtSelect();setTimeout(renderCellModal,0);return;
+      save();syncEntryViews();fillPjtSelect();setTimeout(renderCellModal,0);return;
     }
     else e[f]=el.value;
-    save();renderDaily();refreshPjtList();
-    if(f==="plan")setTimeout(renderCellModal,0);
+    save();syncEntryViews();refreshPjtList();
+    if(f==="plan"||f==="date")setTimeout(renderCellModal,0);
   });
 }
 
@@ -1364,6 +1403,47 @@ function renderPjt(){
   $("#cat-in-tbl").innerHTML=catTableHtml(scope,"수금");
   $("#cat-out-tbl").innerHTML=catTableHtml(scope,"지출");
 }
+/* ---------- PJT 수금실적 ---------- */
+$("#ps-month").value=isoToday().slice(0,7);
+$("#ps-month").onchange=renderPjtSugum;$("#ps-basis").onchange=renderPjtSugum;
+$("#ps-all").onclick=()=>{$("#ps-month").value="";renderPjtSugum();};
+function pjtSugumData(){
+  const ym=$("#ps-month").value,basis=$("#ps-basis").value||"실적";
+  const inBasis=e=>basis==="전체"?true:e.plan===basis;
+  const scope=entries.filter(e=>e.region!=="해외"&&e.type==="수금"&&(!ym||e.date.slice(0,7)===ym)&&inBasis(e)
+    &&PJT_SUGUM.some(g=>g.cats.includes(e.category)));
+  const pjts=[...new Set(scope.map(e=>e.project||"(미지정)"))];
+  const cell=(p,cats)=>scope.filter(e=>(e.project||"(미지정)")===p&&cats.includes(e.category)).reduce((s,e)=>s+e.amount,0);
+  const rows=pjts.map(p=>{const vals=PJT_SUGUM.map(g=>cell(p,g.cats));return {p,vals,tot:vals.reduce((a,b)=>a+b,0)};})
+    .filter(r=>r.tot).sort((a,b)=>b.tot-a.tot);
+  const colTot=PJT_SUGUM.map((g,i)=>rows.reduce((s,r)=>s+r.vals[i],0));
+  return {rows,colTot,grand:colTot.reduce((a,b)=>a+b,0),ym,basis};
+}
+function renderPjtSugum(){
+  const {rows,colTot,grand,ym,basis}=pjtSugumData();
+  const head=`<thead><tr><th class="lft">PJT</th>${PJT_SUGUM.map(g=>`<th>${esc(g.label)}</th>`).join("")}<th>합계</th></tr></thead>`;
+  const body=rows.length?rows.map(r=>`<tr><td class="lft">${esc(r.p)}</td>`+
+    r.vals.map((v,i)=>`<td class="num pscell" data-p="${esc(r.p)}" data-g="${i}" style="cursor:pointer">${v?fmt(v):'<span class="mut">-</span>'}</td>`).join("")+
+    `<td class="num" style="font-weight:800">${fmt(r.tot)}</td></tr>`).join("")
+    :`<tr><td colspan="${PJT_SUGUM.length+2}" class="empty">해당 조건의 PJT 수금 내역이 없습니다</td></tr>`;
+  const tot=rows.length?`<tr class="row-tot"><td class="lft">합계</td>${colTot.map(v=>`<td class="num">${fmt(v)}</td>`).join("")}<td class="num">${fmt(grand)}</td></tr>`:"";
+  $("#ps-table").innerHTML=`<table class="pstbl">${head}<tbody>${body}${tot}</tbody></table>`;
+  $("#ps-summary").textContent=`기준: ${basis} · ${ym||"전체기간"} · PJT ${rows.length}개 · 합계 ${fmt(grand)} (${settings.unit})`;
+  $$("#ps-table .pscell").forEach(td=>td.onclick=()=>{
+    const g=PJT_SUGUM[+td.dataset.g];
+    openCell({region:"국내",label:g.label,cats:g.cats,type:"수금",project:td.dataset.p,ym:$("#ps-month").value||""});
+  });
+}
+$("#ps-xlsx").onclick=()=>{
+  const {rows,colTot,grand,ym,basis}=pjtSugumData();
+  const out=[["PJT 수금실적 · 기준 "+basis+" · "+(ym||"전체기간")]];
+  out.push(["PJT",...PJT_SUGUM.map(g=>g.label),"합계"]);
+  rows.forEach(r=>out.push([r.p,...r.vals,r.tot]));
+  out.push(["합계",...colTot,grand]);
+  const blob=buildXlsx([{name:"PJT 수금실적",rows:out}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_PJT수금실적_"+isoToday()+".xlsx";a.click();
+};
 function achv(plan,real){if(!plan)return real?'<span class="pill real">신규</span>':"-";
   const r=Math.round(real/plan*100);return `<span class="num ${r>=100?'in':r>=70?'':'out'}">${r}%</span>`;}
 function pjtTableHtml(rows,head){
