@@ -387,21 +387,24 @@
   <section id="tab-pjtsu" hidden>
     <div class="card">
       <div class="flex" style="margin-bottom:10px">
-        <h2 style="margin:0">PJT 수금실적</h2>
+        <h2 style="margin:0">PJT 수금실적 (일별)</h2>
         <div class="right flex">
-          <select id="ps-basis" style="width:auto">
-            <option value="실적">실적</option>
-            <option value="전망">전망</option>
-            <option value="전체">전망+실적</option>
+          <select id="ps-basis" style="width:auto" title="표시 기준">
+            <option value="actual">실적</option>
+            <option value="mixed">혼합(과거 실적·미래 계획)</option>
+            <option value="forecast">전망(계획)</option>
           </select>
-          <input type="month" id="ps-month" style="width:auto">
-          <button class="btn sec sm" id="ps-all">전체기간</button>
+          <button class="btn sec sm" id="ps-prev">◀ 이전</button>
+          <input type="date" id="ps-start" style="width:auto">
+          <select id="ps-days" style="width:auto">
+            <option value="7">7일</option><option value="14" selected>14일</option><option value="31">31일</option>
+          </select>
+          <button class="btn sec sm" id="ps-next">다음 ▶</button>
           <button class="btn sec sm" id="ps-xlsx">엑셀</button>
         </div>
       </div>
-      <p class="sub" id="ps-summary" style="margin:0 0 8px"></p>
       <div id="ps-table" style="overflow:auto"></div>
-      <p class="note">셀을 클릭하면 그 PJT·항목의 개별 내역을 조회·수정할 수 있고(일별 현황판과 동일 데이터), 변경은 즉시 반영됩니다.</p>
+      <p class="note">행=PJT별 세부 구분(공사수입/공동원가 회입/받을어음 만기/대여금 회입), 열=일자. 셀을 클릭하면 그 날·PJT·항목 내역을 조회·기입할 수 있고(일별 현황판과 동일 데이터), 변경은 즉시 반영됩니다. 주말은 빨간 머리글.</p>
     </div>
   </section>
 
@@ -1165,12 +1168,12 @@ function naeBalanceOn(date,mode){ // 국내 시재 누적 (기초 + ybd 이후 �
   for(const e of DOM()){if(e.date>ybd&&e.date<=date&&includeEntry(e,mode,today))b+=signed(e);}
   return b;
 }
-function dailyDates(){
-  const start=$("#daily-start").value||isoToday(),n=+$("#daily-days").value||14,W=["일","월","화","수","목","금","토"];
-  const out=[];let d=new Date(start+"T12:00:00");
-  for(let k=0;k<n;k++){const wd=d.getDay();out.push({iso:fmtDate(d),wd,we:wd===0||wd===6,dow:W[wd]});d.setDate(d.getDate()+1);}
+function makeDates(startISO,n){
+  const W=["일","월","화","수","목","금","토"],out=[];let d=new Date((startISO||isoToday())+"T12:00:00");
+  for(let k=0;k<(n||14);k++){const wd=d.getDay();out.push({iso:fmtDate(d),wd,we:wd===0||wd===6,dow:W[wd]});d.setDate(d.getDate()+1);}
   return out;
 }
+function dailyDates(){return makeDates($("#daily-start").value,+$("#daily-days").value);}
 function dailyCell(data,cats,type,iso,today,mode){
   return data.filter(e=>e.type===type&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,mode||"mixed",today)).reduce((s,e)=>s+e.amount,0);
 }
@@ -1403,46 +1406,52 @@ function renderPjt(){
   $("#cat-in-tbl").innerHTML=catTableHtml(scope,"수금");
   $("#cat-out-tbl").innerHTML=catTableHtml(scope,"지출");
 }
-/* ---------- PJT 수금실적 ---------- */
-$("#ps-month").value=isoToday().slice(0,7);
-$("#ps-month").onchange=renderPjtSugum;$("#ps-basis").onchange=renderPjtSugum;
-$("#ps-all").onclick=()=>{$("#ps-month").value="";renderPjtSugum();};
-function pjtSugumData(){
-  const ym=$("#ps-month").value,basis=$("#ps-basis").value||"실적";
-  const inBasis=e=>basis==="전체"?true:e.plan===basis;
-  const scope=entries.filter(e=>e.region!=="해외"&&e.type==="수금"&&(!ym||e.date.slice(0,7)===ym)&&inBasis(e)
-    &&PJT_SUGUM.some(g=>g.cats.includes(e.category)));
-  const pjts=[...new Set(scope.map(e=>e.project||"(미지정)"))];
-  const cell=(p,cats)=>scope.filter(e=>(e.project||"(미지정)")===p&&cats.includes(e.category)).reduce((s,e)=>s+e.amount,0);
-  const rows=pjts.map(p=>{const vals=PJT_SUGUM.map(g=>cell(p,g.cats));return {p,vals,tot:vals.reduce((a,b)=>a+b,0)};})
-    .filter(r=>r.tot).sort((a,b)=>b.tot-a.tot);
-  const colTot=PJT_SUGUM.map((g,i)=>rows.reduce((s,r)=>s+r.vals[i],0));
-  return {rows,colTot,grand:colTot.reduce((a,b)=>a+b,0),ym,basis};
+/* ---------- PJT 수금실적 (일별) ---------- */
+{const d=new Date();d.setDate(d.getDate()-2);$("#ps-start").value=fmtDate(d);}
+$("#ps-basis").onchange=renderPjtSugum;$("#ps-start").onchange=renderPjtSugum;$("#ps-days").onchange=renderPjtSugum;
+$("#ps-prev").onclick=()=>psShift(-1);$("#ps-next").onclick=()=>psShift(1);
+function psShift(dir){const n=+$("#ps-days").value||14,x=new Date(($("#ps-start").value||isoToday())+"T12:00:00");
+  x.setDate(x.getDate()+dir*n);$("#ps-start").value=fmtDate(x);renderPjtSugum();}
+function psData(){
+  const mode=$("#ps-basis").value||"actual",today=isoToday();
+  const dates=makeDates($("#ps-start").value,+$("#ps-days").value);
+  const scope=entries.filter(e=>e.region!=="해외"&&e.type==="수금"&&PJT_SUGUM.some(g=>g.cats.includes(e.category)));
+  const pjts=[...new Set(scope.map(e=>e.project||"(미지정)"))].sort((a,b)=>a.localeCompare(b,"ko"));
+  const cell=(p,cats,iso)=>scope.filter(e=>(e.project||"(미지정)")===p&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,mode,today)).reduce((s,e)=>s+e.amount,0);
+  return {mode,dates,pjts,cell};
 }
 function renderPjtSugum(){
-  const {rows,colTot,grand,ym,basis}=pjtSugumData();
-  const head=`<thead><tr><th class="lft">PJT</th>${PJT_SUGUM.map(g=>`<th>${esc(g.label)}</th>`).join("")}<th>합계</th></tr></thead>`;
-  const body=rows.length?rows.map(r=>`<tr><td class="lft">${esc(r.p)}</td>`+
-    r.vals.map((v,i)=>`<td class="num pscell" data-p="${esc(r.p)}" data-g="${i}" style="cursor:pointer">${v?fmt(v):'<span class="mut">-</span>'}</td>`).join("")+
-    `<td class="num" style="font-weight:800">${fmt(r.tot)}</td></tr>`).join("")
-    :`<tr><td colspan="${PJT_SUGUM.length+2}" class="empty">해당 조건의 PJT 수금 내역이 없습니다</td></tr>`;
-  const tot=rows.length?`<tr class="row-tot"><td class="lft">합계</td>${colTot.map(v=>`<td class="num">${fmt(v)}</td>`).join("")}<td class="num">${fmt(grand)}</td></tr>`:"";
-  $("#ps-table").innerHTML=`<table class="pstbl">${head}<tbody>${body}${tot}</tbody></table>`;
-  $("#ps-summary").textContent=`기준: ${basis} · ${ym||"전체기간"} · PJT ${rows.length}개 · 합계 ${fmt(grand)} (${settings.unit})`;
-  $$("#ps-table .pscell").forEach(td=>td.onclick=()=>{
-    const g=PJT_SUGUM[+td.dataset.g];
-    openCell({region:"국내",label:g.label,cats:g.cats,type:"수금",project:td.dataset.p,ym:$("#ps-month").value||""});
+  const {dates,pjts,cell}=psData();
+  const head=`<thead><tr><th class="lbl">PJT / 세부구분 <span style="font-weight:400">(${esc(settings.unit)})</span></th>`+
+    dates.map(x=>`<th class="${x.we?'we':''}">${x.dow}</th>`).join("")+`</tr>`+
+    `<tr><th class="lbl">날짜</th>`+dates.map(x=>`<th class="${x.we?'we':''}">${x.iso.slice(5)}</th>`).join("")+`</tr></thead>`;
+  let body="";
+  pjts.forEach(p=>{
+    body+=`<tr class="grp"><td class="lbl">${esc(p)}</td>`+
+      dates.map(x=>{const v=PJT_SUGUM.reduce((s,g)=>s+cell(p,g.cats,x.iso),0);return `<td class="${x.we?'we':''}">${v?fmt(v):""}</td>`;}).join("")+`</tr>`;
+    PJT_SUGUM.forEach((g,gi)=>{body+=`<tr><td class="lbl" style="padding-left:22px">${esc(g.label)}</td>`+
+      dates.map(x=>{const v=cell(p,g.cats,x.iso);
+        return `<td class="cellc ${x.we?'we ':''}${v?'':'z'}" data-p="${esc(p)}" data-g="${gi}" data-iso="${x.iso}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`;});
   });
+  if(!pjts.length)body=`<tr><td class="lbl">-</td><td class="empty" colspan="${dates.length}">PJT 수금 내역이 없습니다. 셀을 클릭해 추가하세요.</td></tr>`;
+  const totRow=pjts.length?`<tr class="tot"><td class="lbl">전체 합계</td>`+
+    dates.map(x=>{const v=pjts.reduce((s,p)=>s+PJT_SUGUM.reduce((ss,g)=>ss+cell(p,g.cats,x.iso),0),0);return `<td class="${x.we?'we':''}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`:"";
+  $("#ps-table").innerHTML=`<table class="daily">${head}<tbody>${body}${totRow}</tbody></table>`;
+  $$("#ps-table .cellc").forEach(td=>td.onclick=()=>{const g=PJT_SUGUM[+td.dataset.g];
+    openCell({region:"국내",label:g.label,cats:g.cats,type:"수금",iso:td.dataset.iso,project:td.dataset.p});});
 }
 $("#ps-xlsx").onclick=()=>{
-  const {rows,colTot,grand,ym,basis}=pjtSugumData();
-  const out=[["PJT 수금실적 · 기준 "+basis+" · "+(ym||"전체기간")]];
-  out.push(["PJT",...PJT_SUGUM.map(g=>g.label),"합계"]);
-  rows.forEach(r=>out.push([r.p,...r.vals,r.tot]));
-  out.push(["합계",...colTot,grand]);
+  const {dates,pjts,cell}=psData();
+  const out=[["PJT / 세부구분","요일",...dates.map(x=>x.dow)]];
+  out.push(["","날짜",...dates.map(x=>x.iso)]);
+  pjts.forEach(p=>{
+    out.push([p,"소계",...dates.map(x=>PJT_SUGUM.reduce((s,g)=>s+cell(p,g.cats,x.iso),0))]);
+    PJT_SUGUM.forEach(g=>out.push(["",g.label,...dates.map(x=>cell(p,g.cats,x.iso))]));
+  });
+  out.push(["전체 합계","",...dates.map(x=>pjts.reduce((s,p)=>s+PJT_SUGUM.reduce((ss,g)=>ss+cell(p,g.cats,x.iso),0),0))]);
   const blob=buildXlsx([{name:"PJT 수금실적",rows:out}]);
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);
-  a.download="자금수지_PJT수금실적_"+isoToday()+".xlsx";a.click();
+  a.download="자금수지_PJT수금실적_"+($("#ps-start").value||isoToday())+".xlsx";a.click();
 };
 function achv(plan,real){if(!plan)return real?'<span class="pill real">신규</span>':"-";
   const r=Math.round(real/plan*100);return `<span class="num ${r>=100?'in':r>=70?'':'out'}">${r}%</span>`;}
