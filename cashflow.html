@@ -538,6 +538,7 @@ if(!settings.gapjiW||typeof settings.gapjiW!=="object")settings.gapjiW={};
 if(settings.ovCollapsed==null)settings.ovCollapsed=true;
 if(!settings.fcNotes||typeof settings.fcNotes!=="object")settings.fcNotes={};
 if(!settings.fcW||typeof settings.fcW!=="object")settings.fcW={};
+if(!settings.fcNoteCount)settings.fcNoteCount=2;
 if(!settings.ytdBase)settings.ytdBase={국내:{},해외:{}};
 if(!settings.ytdBase.국내)settings.ytdBase.국내={};
 if(!settings.ytdBase.해외)settings.ytdBase.해외={};
@@ -791,7 +792,7 @@ function gapjiCalc(region,D){
     let auto="";
     if(type==="수금"){
       auto=data.filter(e=>hit(e)&&e.plan==="전망"&&e.date===D).sort((a,b)=>b.amount-a.amount)
-        .slice(0,2).map(e=>`${e.memo||e.project||label}_${fmt(e.amount)}`).join(", ");
+        .slice(0,settings.fcNoteCount||2).map(e=>`${e.memo||e.project||label}_${fmt(e.amount)}`).join(", ");
     }
     const note=(label in m.note)?m.note[label]:auto;
     const diff=(label in m.diff)?String(m.diff[label]):"";  // 계획대비 주요 차이(수기 텍스트)
@@ -889,6 +890,11 @@ document.addEventListener("change",ev=>{
   if(v.trim()==="")delete settings.fcNotes[iso];else settings.fcNotes[iso]=v;
   save();
 });
+/* 주요 내역 표시 건수 */
+document.addEventListener("change",ev=>{
+  if(ev.target.id!=="fc-count")return;
+  settings.fcNoteCount=parseInt(ev.target.value)||2;save();renderReports();
+});
 /* '26년 실적 기초값 입력 */
 document.addEventListener("change",ev=>{
   const el=ev.target;if(!el.classList||!el.classList.contains("g-ytd"))return;
@@ -933,8 +939,8 @@ function forecastCalc(D,n){
     const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
     const bal=naeRun(x.iso);
     ti+=i;to+=o;if(bal<min){min=bal;minDay=x.iso;}
-    // 주요 내역: 큰 건 1~2개 (수기 수정 가능)
-    const auto=de.slice().sort((a,b)=>b.amount-a.amount).slice(0,2)
+    // 주요 내역: 큰 건 N개 (설정, 수기 수정 가능)
+    const auto=de.slice().sort((a,b)=>b.amount-a.amount).slice(0,settings.fcNoteCount||2)
       .map(e=>`${e.memo||e.project||e.category}_${fmt(e.type==="지출"?-e.amount:e.amount)}`).join(", ");
     const note=(x.iso in settings.fcNotes)?settings.fcNotes[x.iso]:auto;
     return {iso:x.iso,dow:x.dow,i,o,net:i-o,bal,note};
@@ -965,7 +971,8 @@ function forecastHtml(D){
       <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
       <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td>
       <td class="memo"><textarea class="fc-note" data-iso="${r.iso}" rows="1">${esc(r.note)}</textarea></td></tr>`).join("");
-  return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small></h2>
+  const cntOpt=[1,2,3,4,5].map(n=>`<option value="${n}"${(settings.fcNoteCount||2)===n?" selected":""}>${n}건</option>`).join("");
+  return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small><span style="float:right;font-weight:400;font-size:12.5px">주요 내역 표시 <select id="fc-count" style="width:auto">${cntOpt}</select></span></h2>
     <div class="kpis">
       ${kpi("기준 시재",fmt(f.startBal))}
       ${kpi("10일 입금(계획)",fmt(f.ti),"in")}
@@ -1440,7 +1447,7 @@ $("#s-restore").onchange=e=>{
         projects:Array.isArray(s.projects)?s.projects.slice():[],
         gapjiW:(s.gapjiW&&typeof s.gapjiW==="object")?s.gapjiW:{},ovCollapsed:s.ovCollapsed!==false,
         fcNotes:(s.fcNotes&&typeof s.fcNotes==="object")?s.fcNotes:{},
-        fcW:(s.fcW&&typeof s.fcW==="object")?s.fcW:{},
+        fcW:(s.fcW&&typeof s.fcW==="object")?s.fcW:{},fcNoteCount:Number(s.fcNoteCount)||2,
         ytdBase:(s.ytdBase&&typeof s.ytdBase==="object")?{국내:s.ytdBase.국내||{},해외:s.ytdBase.해외||{}}:{국내:{},해외:{}}};
     }
     manual=(snap.manual&&typeof snap.manual==="object")?snap.manual:{};
