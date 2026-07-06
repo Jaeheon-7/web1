@@ -106,6 +106,8 @@
   .g-edit:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1px #7ba7d4}
   .g-edit.num{text-align:right;font-variant-numeric:tabular-nums}
   .g-edit.lft{text-align:left}
+  textarea.atxt{resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;line-height:1.35;min-height:20px;display:block;box-sizing:border-box}
+  table.gapji td.memo{overflow:visible;white-space:normal;vertical-align:top}
   /* ---- 일별 현황판 ---- */
   table.daily{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap}
   table.daily th,table.daily td{border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);padding:5px 9px;text-align:right}
@@ -808,8 +810,8 @@ function planVarHtml(plan,real){if(!plan&&!real)return "-";const d=real-plan;
 function gapjiHtml(D,region){
   region=region||"국내";
   const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
-  const eD=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" value="${esc(r.diff)}">`;
-  const eN=r=>`<input class="g-edit lft" data-r="${region}" data-d="${D}" data-k="note" data-l="${esc(r.label)}" value="${esc(r.note)}">`;
+  const eD=r=>`<textarea class="g-edit atxt lft" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" rows="1">${esc(r.diff)}</textarea>`;
+  const eN=r=>`<textarea class="g-edit atxt lft" data-r="${region}" data-d="${D}" data-k="note" data-l="${esc(r.label)}" rows="1">${esc(r.note)}</textarea>`;
   const rowHtml=r=>`<tr><td class="lft">${esc(r.label)}</td>
       <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
       <td class="num mut">${r.pPlan?fmt(r.pPlan):"-"}</td>
@@ -970,7 +972,7 @@ function forecastHtml(D){
       <td class="num out">${r.o?fmt(r.o):"-"}</td>
       <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
       <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td>
-      <td class="memo"><textarea class="fc-note" data-iso="${r.iso}" rows="1">${esc(r.note)}</textarea></td></tr>`).join("");
+      <td class="memo"><textarea class="fc-note atxt" data-iso="${r.iso}" rows="1">${esc(r.note)}</textarea></td></tr>`).join("");
   const cntOpt=[1,2,3,4,5].map(n=>`<option value="${n}"${(settings.fcNoteCount||2)===n?" selected":""}>${n}건</option>`).join("");
   return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small><span style="float:right;font-weight:400;font-size:12.5px">주요 내역 표시 <select id="fc-count" style="width:auto">${cntOpt}</select></span></h2>
     <div class="kpis">
@@ -996,9 +998,9 @@ function renderReports(){
   $("#g-forecast").innerHTML=forecastHtml(D);
   wireGapjiResizers();applyOvCollapse();growFcNotes();
 }
-function growFcNotes(){$$("#g-forecast .fc-note").forEach(t=>{t.style.height="auto";t.style.height=t.scrollHeight+"px";});}
+function growFcNotes(){$$("#g-report .atxt,#g-overseas .atxt,#g-forecast .atxt").forEach(t=>{t.style.height="auto";t.style.height=t.scrollHeight+"px";});}
 document.addEventListener("input",ev=>{const el=ev.target;
-  if(el.classList&&el.classList.contains("fc-note")){el.style.height="auto";el.style.height=el.scrollHeight+"px";}});
+  if(el.classList&&el.classList.contains("atxt")){el.style.height="auto";el.style.height=el.scrollHeight+"px";}});
 function applyOvCollapse(){
   const c=settings.ovCollapsed;
   $("#g-overseas").style.display=c?"none":"";
