@@ -1,0 +1,1902 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>자금수지 모판</title>
+<style>
+  :root{
+    --bg:#f4f6fa; --panel:#ffffff; --ink:#1f2733; --muted:#6b7688;
+    --line:#e3e8f0; --line2:#eef1f6;
+    --in:#1a7f5a; --in-bg:#e7f6ef;      /* 수금 */
+    --out:#c0392b; --out-bg:#fdecea;    /* 지출 */
+    --plan:#2f6fb0; --accent:#2f6fb0;
+    --shadow:0 1px 3px rgba(20,30,50,.06),0 6px 20px rgba(20,30,50,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"Malgun Gothic","Apple SD Gothic Neo",system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:14px;line-height:1.45}
+  header{background:linear-gradient(135deg,#243b53,#334e68);color:#fff;padding:16px 22px}
+  header h1{margin:0;font-size:19px;font-weight:700;letter-spacing:-.3px}
+  header p{margin:4px 0 0;font-size:12.5px;color:#c9d6e5}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px}
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button{border:1px solid var(--line);background:#fff;color:var(--muted);
+    padding:9px 16px;border-radius:9px;cursor:pointer;font-size:13.5px;font-weight:600}
+  .tabs button.on{background:#243b53;color:#fff;border-color:#243b53}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+  .card h2{margin:0 0 14px;font-size:15px;font-weight:700}
+  .card h2 small{font-weight:500;color:var(--muted);font-size:12px;margin-left:8px}
+  label{display:block;font-size:12px;color:var(--muted);margin:0 0 4px;font-weight:600}
+  input,select{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;
+    font-size:13.5px;background:#fff;color:var(--ink);font-family:inherit}
+  input:focus,select:focus{outline:2px solid #cdduedff;outline-color:#bcd3ee;border-color:#7ba7d4}
+  .grid{display:grid;gap:12px}
+  .btn{border:none;border-radius:8px;padding:9px 16px;font-size:13.5px;font-weight:700;
+    cursor:pointer;background:#243b53;color:#fff}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.sec{background:#eef1f6;color:#33445a}
+  .btn.sm{padding:5px 10px;font-size:12px;border-radius:6px}
+  .btn.danger{background:var(--out-bg);color:var(--out)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{flex:1;border:none;background:#fff;padding:8px;cursor:pointer;font-weight:700;
+    font-size:13px;color:var(--muted)}
+  .seg button.on-in{background:var(--in-bg);color:var(--in)}
+  .seg button.on-out{background:var(--out-bg);color:var(--out)}
+  .seg button.on-plan{background:#eaf1f9;color:var(--plan)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line2);text-align:right;white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:12px;background:#fafbfd;text-align:right}
+  th:first-child,td:first-child{text-align:left}
+  td.lft,th.lft{text-align:left}
+  tbody tr:hover{background:#fafcff}
+  .num{font-variant-numeric:tabular-nums}
+  .in{color:var(--in)} .out{color:var(--out)} .mut{color:var(--muted)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:700}
+  .pill.in{background:var(--in-bg);color:var(--in)}
+  .pill.out{background:var(--out-bg);color:var(--out)}
+  .pill.plan{background:#eaf1f9;color:var(--plan)}
+  .pill.real{background:#eef7ee;color:#2e7d32}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .kpi .lbl{font-size:12px;color:var(--muted);font-weight:600}
+  .kpi .val{font-size:22px;font-weight:800;margin-top:4px;font-variant-numeric:tabular-nums}
+  .row-tot td{font-weight:800;border-top:2px solid var(--line);background:#f8fafc}
+  .sub{color:var(--muted);font-size:12px}
+  .flex{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .right{margin-left:auto}
+  .empty{color:var(--muted);text-align:center;padding:26px;font-size:13px}
+  .balance-line{display:flex;justify-content:space-between;padding:10px 14px;border-radius:9px;
+    background:#f7f9fc;margin-top:6px;font-weight:700}
+  .balance-line.big{background:#243b53;color:#fff;font-size:16px}
+  svg{width:100%;height:auto;display:block}
+  .note{font-size:11.5px;color:var(--muted);margin-top:6px}
+  /* ---- 갑지(보고서) ---- */
+  .g-title{text-align:center;margin:2px 0 2px}
+  .g-title h3{margin:0;font-size:18px;font-weight:800;letter-spacing:1px}
+  .g-title .d{color:var(--muted);font-size:12.5px}
+  .g-unit{text-align:right;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+  table.gapji{border:1px solid #b8c2d0;font-size:12.5px;table-layout:fixed;width:auto}
+  table.gapji th{position:relative}
+  table.gapji td{overflow:hidden;text-overflow:ellipsis}
+  .colrs{position:absolute;top:0;right:0;width:8px;height:100%;cursor:col-resize;user-select:none;z-index:5}
+  .colrs:hover{background:#7ba7d4}
+  table.rztbl{table-layout:fixed;width:auto}
+  table.rztbl th{position:relative}
+  table.rztbl td{overflow:hidden}
+  table.rztbl td.memo{overflow:visible;white-space:normal}
+  .fc-note{width:100%;box-sizing:border-box;resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;
+    font:inherit;color:inherit;border:1px solid transparent;border-radius:4px;padding:3px 5px;background:transparent;line-height:1.35;min-height:22px;display:block}
+  .fc-note:hover{background:#eef3fb}
+  .fc-note:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1px #7ba7d4}
+  #g-ov-bar{margin-top:22px;cursor:pointer;background:#eef1f6;border:1px solid var(--line);border-radius:8px;
+    padding:9px 14px;font-weight:800;color:#33445a;user-select:none}
+  #g-ov-bar:hover{background:#e6ebf3}
+  @media print{#g-ov-bar{display:none}}
+  table.gapji th,table.gapji td{border:1px solid #cfd8e3;padding:5px 8px}
+  table.gapji thead th{background:#eef3ea;color:#33445a;text-align:center;font-weight:700}
+  table.gapji td.lft,table.gapji th.lft{text-align:left}
+  table.gapji tr.grp td{background:#f1f5fb;font-weight:800;text-align:left;color:#243b53}
+  table.gapji tr.row-tot td{background:#eaf0e6;font-weight:800}
+  table.gapji td.memo{white-space:normal;color:#33445a;text-align:left;min-width:190px}
+  .g-edit{width:100%;border:none;background:transparent;font:inherit;color:inherit;padding:2px 3px;border-radius:4px}
+  .g-edit:hover{background:#eef3fb}
+  .g-edit:focus{outline:none;background:#fff;box-shadow:inset 0 0 0 1px #7ba7d4}
+  .g-edit.num{text-align:right;font-variant-numeric:tabular-nums}
+  .g-edit.lft{text-align:left}
+  textarea.atxt{resize:none;overflow:hidden;white-space:pre-wrap;word-break:break-word;line-height:1.35;min-height:20px;display:block;box-sizing:border-box}
+  table.gapji td.memo{overflow:visible;white-space:normal;vertical-align:top}
+  table.pstbl td.pscell:hover{background:#eaf1f9;box-shadow:inset 0 0 0 2px #7ba7d4}
+  /* ---- 일별 현황판 ---- */
+  table.daily{border-collapse:separate;border-spacing:0;font-size:12px;white-space:nowrap}
+  table.daily th,table.daily td{border-bottom:1px solid var(--line2);border-right:1px solid var(--line2);padding:5px 9px;text-align:right}
+  table.daily thead th{background:#eef3ea;color:#33445a;text-align:center;position:sticky;top:0;z-index:2}
+  table.daily th.we,table.daily thead th.we{background:#fdecea;color:#c0392b}
+  table.daily td.we{background:#fdf3f2}
+  table.daily .lbl{position:sticky;left:0;background:#fff;text-align:left;z-index:1;min-width:180px;border-right:2px solid var(--line)}
+  table.daily thead .lbl{z-index:3;background:#e7ecdf}
+  table.daily tr.grp td{background:#f1f5fb;font-weight:800;text-align:left}
+  table.daily tr.grp .lbl{background:#f1f5fb}
+  table.daily tr.tot td{background:#eaf0e6;font-weight:800}
+  table.daily tr.tot .lbl{background:#eaf0e6}
+  table.daily tr.bal td{background:#243b53;color:#fff;font-weight:800}
+  table.daily tr.bal .lbl{background:#243b53;color:#fff}
+  table.daily .z{color:#c7cfda}
+  table.daily td.cellc{cursor:pointer}
+  table.daily td.cellc:hover{background:#eaf1f9;box-shadow:inset 0 0 0 2px #7ba7d4}
+  .modal-bg{position:fixed;inset:0;background:rgba(20,30,50,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-bg[hidden]{display:none}
+  .modal{background:#fff;border-radius:12px;padding:18px;max-width:720px;width:100%;max-height:86vh;overflow:auto;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .ce-tbl{width:100%;font-size:13px;margin-top:4px}
+  .ce-tbl th,.ce-tbl td{padding:5px 7px;border-bottom:1px solid var(--line2);text-align:left;white-space:nowrap}
+  .ce-tbl th{color:var(--muted);font-size:12px;font-weight:600}
+  .ce{padding:5px 7px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit}
+  .ce.num{text-align:right;font-variant-numeric:tabular-nums}
+  .g-sum{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  .g-sum .kpi .val{font-size:18px}
+  @media print{
+    header,.tabs,#g-controls,#g-ytd-panel{display:none!important}
+    .g-edit{box-shadow:none!important;background:transparent!important}
+    body{background:#fff}
+    .wrap{max-width:none;padding:0;margin:0}
+    .card{border:none;box-shadow:none;margin:0;padding:0}
+    @page{size:A4 landscape;margin:12mm}
+    table.gapji{font-size:11px}
+  }
+  @media(max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}.hide-sm{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>자금수지 모판</h1>
+  <p>일별 수금·지출 · 전망/실적 · PJT별 수금 · 시재 추이 — 브라우저에 자동 저장됩니다</p>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <button data-tab="input" class="on">입력</button>
+    <button data-tab="gapji">일일 갑지</button>
+    <button data-tab="daily">일별 현황판</button>
+    <button data-tab="board">일일 모판</button>
+    <button data-tab="trend">월 추이</button>
+    <button data-tab="pjt">PJT · 전망대비</button>
+    <button data-tab="pjtsu">PJT 수금실적</button>
+    <button data-tab="settings">설정 · 백업</button>
+  </div>
+
+  <!-- ============ INPUT ============ -->
+  <section id="tab-input">
+    <div class="card">
+      <h2>내역 입력 <small>한 건씩 추가하면 모든 화면에 자동 반영됩니다</small></h2>
+      <div class="grid" style="grid-template-columns:1.1fr 1fr;align-items:start">
+        <div class="grid" style="grid-template-columns:1fr 1fr">
+          <div style="grid-column:1/3">
+            <label>국내 / 해외</label>
+            <div class="seg" id="f-region">
+              <button type="button" data-v="국내" class="on-plan">국내</button>
+              <button type="button" data-v="해외">해외 (USD)</button>
+            </div>
+          </div>
+          <div>
+            <label>일자</label>
+            <input type="date" id="f-date">
+          </div>
+          <div>
+            <label>구분</label>
+            <div class="seg" id="f-type">
+              <button type="button" data-v="수금" class="on-in">수금</button>
+              <button type="button" data-v="지출">지출</button>
+            </div>
+          </div>
+          <div>
+            <label>전망 / 실적</label>
+            <div class="seg" id="f-plan">
+              <button type="button" data-v="전망" class="on-plan">전망</button>
+              <button type="button" data-v="실적">실적</button>
+            </div>
+          </div>
+          <div>
+            <label>금액 <span id="unit-lbl2" class="sub"></span></label>
+            <input type="text" id="f-amount" inputmode="numeric" placeholder="예: 1,200">
+            <div id="fx-hint" class="note" style="display:none">해외는 USD(백만불)로 입력 → 갑지에 환율로 환산됩니다</div>
+          </div>
+          <div style="grid-column:1/3">
+            <label>상세구분</label>
+            <select id="f-cat"></select>
+          </div>
+          <div id="f-pjt-box" style="grid-column:1/3">
+            <label>PJT <span class="sub">(등록 목록에서 선택 · 새 PJT는 등록 후 사용)</span></label>
+            <select id="f-pjt"></select>
+          </div>
+          <div id="f-fx-box" style="grid-column:1/3;display:none">
+            <label>회입 적용환율 <span class="sub">(원/USD · 회입시점 환율)</span></label>
+            <input type="text" id="f-fx" inputmode="numeric" placeholder="예: 1,350">
+          </div>
+          <div style="grid-column:1/3">
+            <label>메모</label>
+            <input type="text" id="f-memo" placeholder="예: 3차 기성">
+          </div>
+          <div style="grid-column:1/3;display:flex;gap:8px">
+            <button class="btn" id="f-add" style="flex:1">＋ 추가</button>
+            <button class="btn sec" id="f-cancel" style="display:none">수정 취소</button>
+          </div>
+        </div>
+        <div>
+          <div class="flex" style="margin-bottom:8px">
+            <strong style="font-size:13px">최근 입력</strong>
+            <span class="right sub" id="recent-count"></span>
+          </div>
+          <div style="max-height:420px;overflow:auto;border:1px solid var(--line2);border-radius:8px">
+            <table id="recent-tbl"></table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DAILY BOARD (일별 현황판) ============ -->
+  <section id="tab-daily" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:10px">
+        <h2 style="margin:0">일별 현황판</h2>
+        <div class="right flex">
+          <select id="daily-region" style="width:auto">
+            <option value="국내">국내</option>
+            <option value="해외">해외(USD)</option>
+          </select>
+          <select id="daily-mode" style="width:auto" title="표시 기준">
+            <option value="mixed">혼합(과거 실적·미래 계획)</option>
+            <option value="forecast">전망(계획)</option>
+            <option value="actual">실적</option>
+          </select>
+          <button class="btn sec sm" id="daily-prev">◀ 이전</button>
+          <input type="date" id="daily-start" style="width:auto">
+          <select id="daily-days" style="width:auto">
+            <option value="7">7일</option>
+            <option value="14" selected>14일</option>
+            <option value="31">31일</option>
+          </select>
+          <button class="btn sec sm" id="daily-next">다음 ▶</button>
+          <button class="btn sec sm" id="daily-xlsx">엑셀</button>
+          <button class="btn sec sm" id="daily-raw" title="전체 입력내역 원본(중복 제거)">Raw 엑셀</button>
+        </div>
+      </div>
+      <div id="daily-board" style="overflow:auto"></div>
+      <p class="note">셀 = 해당 일자·항목 금액(과거 실적·미래 계획). 상단 ‘자금수지(국내시재)’는 국내 시재 누적입니다. 주말은 빨간 머리글.</p>
+    </div>
+  </section>
+
+  <!-- ============ BOARD ============ -->
+  <section id="tab-board" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:8px">
+        <h2 style="margin:0">일일 모판</h2>
+        <div class="right flex">
+          <span class="sub">시재 기준</span>
+          <select id="board-mode" style="width:auto">
+            <option value="mixed">혼합(과거 실적·미래 전망)</option>
+            <option value="actual">실적</option>
+            <option value="forecast">전망</option>
+          </select>
+          <input type="date" id="board-date" style="width:auto">
+        </div>
+      </div>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <h2 style="font-size:13.5px;color:var(--in)">수금</h2>
+          <table id="board-in"></table>
+        </div>
+        <div>
+          <h2 style="font-size:13.5px;color:var(--out)">지출</h2>
+          <table id="board-out"></table>
+        </div>
+      </div>
+      <div style="margin-top:16px;max-width:520px;margin-left:auto">
+        <div class="balance-line"><span>전일 시재</span><span class="num" id="b-prev">0</span></div>
+        <div class="balance-line"><span>＋ 당일 수금</span><span class="num in" id="b-in">0</span></div>
+        <div class="balance-line"><span>－ 당일 지출</span><span class="num out" id="b-out">0</span></div>
+        <div class="balance-line big"><span>＝ 당일 시재</span><span class="num" id="b-close">0</span></div>
+        <p class="note">‘혼합’ 기준: 오늘 이전은 실적, 오늘 이후는 전망으로 시재를 계산합니다.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ GAPJI (daily report) ============ -->
+  <section id="tab-gapji" hidden>
+    <div class="card">
+      <div class="flex" id="g-controls" style="margin-bottom:6px">
+        <h2 style="margin:0">일일 자금수지 현황 (갑지)</h2>
+        <div class="right flex">
+          <input type="date" id="g-date" style="width:auto">
+          <button class="btn sec sm" id="g-wreset" title="열 너비를 기본값으로">↔ 너비 초기화</button>
+          <button class="btn sec sm" id="g-capture">📷 이미지 저장</button>
+          <button class="btn sec sm" id="g-print">🖨 인쇄 / PDF</button>
+          <button class="btn sec sm" id="g-xlsx">엑셀로 저장</button>
+        </div>
+      </div>
+      <details id="g-ytd-panel" style="margin:2px 0 14px;border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:#fbfcfe">
+        <summary style="cursor:pointer;font-weight:700;font-size:13px">'26년 실적 기초값 입력 (기준일까지 누계) ▾</summary>
+        <div class="flex" style="margin:10px 0">
+          <label style="margin:0">기초 기준일</label>
+          <input type="date" id="g-ytd-date" style="width:auto">
+          <span class="note">이 날짜까지의 누계를 아래에 입력하면, 여기에 전일 실적이 더해져 '26년 실적이 됩니다.</span>
+        </div>
+        <div class="flex" style="margin:0 0 10px">
+          <label style="margin:0">국내 시재(사내예금/사내차입금) 기초값</label>
+          <input type="text" id="g-nae-base" inputmode="numeric" style="width:140px">
+          <span class="note">'26 실적 수지차(입금 계−지출 계)가 더해집니다</span>
+        </div>
+        <div id="g-ytd-inputs" style="overflow:auto"></div>
+      </details>
+      <div id="g-report"></div>
+      <div id="g-ov-bar">해외 수지 <span id="g-ov-caret">▸</span> <span class="sub" style="font-weight:400">작업 중 · 클릭해 펼치기/접기</span></div>
+      <div id="g-overseas" style="margin-top:10px"></div>
+      <div id="g-forecast" style="margin-top:26px"></div>
+    </div>
+  </section>
+
+  <!-- ============ TREND ============ -->
+  <section id="tab-trend" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:12px">
+        <h2 style="margin:0">월 추이</h2>
+        <div class="right flex">
+          <span class="sub">시재 기준</span>
+          <select id="trend-mode" style="width:auto">
+            <option value="mixed">혼합(과거 실적·미래 전망)</option>
+            <option value="actual">실적</option>
+            <option value="forecast">전망</option>
+          </select>
+          <input type="month" id="trend-month" style="width:auto">
+        </div>
+      </div>
+      <div class="kpis" id="trend-kpis"></div>
+      <div class="card" style="box-shadow:none;background:#fbfcfe">
+        <h2 style="font-size:13px">누적 시재 추이</h2>
+        <div id="trend-chart"></div>
+      </div>
+      <div style="overflow:auto">
+        <table id="trend-tbl"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PJT / PLAN vs ACTUAL ============ -->
+  <section id="tab-pjt" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:12px">
+        <h2 style="margin:0">PJT별 수금 · 전망대비 실적</h2>
+        <div class="right flex">
+          <input type="month" id="pjt-month" style="width:auto">
+          <button class="btn sec sm" id="pjt-all">전체기간</button>
+        </div>
+      </div>
+      <h2 style="font-size:13.5px">PJT별 수금 (전망 vs 실적)</h2>
+      <table id="pjt-tbl"></table>
+      <h2 style="font-size:13.5px;margin-top:22px">상세구분별 전망 vs 실적</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px">
+        <div><table id="cat-in-tbl"></table></div>
+        <div><table id="cat-out-tbl"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PJT 수금실적 ============ -->
+  <section id="tab-pjtsu" hidden>
+    <div class="card">
+      <div class="flex" style="margin-bottom:10px">
+        <h2 style="margin:0">PJT 수금실적 (일별)</h2>
+        <div class="right flex">
+          <select id="ps-basis" style="width:auto" title="표시 기준">
+            <option value="actual">실적</option>
+            <option value="mixed">혼합(과거 실적·미래 계획)</option>
+            <option value="forecast">전망(계획)</option>
+          </select>
+          <button class="btn sec sm" id="ps-prev">◀ 이전</button>
+          <input type="date" id="ps-start" style="width:auto">
+          <select id="ps-days" style="width:auto">
+            <option value="7">7일</option><option value="14" selected>14일</option><option value="31">31일</option>
+          </select>
+          <button class="btn sec sm" id="ps-next">다음 ▶</button>
+          <button class="btn sec sm" id="ps-xlsx">엑셀</button>
+        </div>
+      </div>
+      <div id="ps-table" style="overflow:auto"></div>
+      <p class="note">행=PJT별 세부 구분(공사수입/공동원가 회입/받을어음 만기/대여금 회입), 열=일자. 셀을 클릭하면 그 날·PJT·항목 내역을 조회·기입할 수 있고(일별 현황판과 동일 데이터), 변경은 즉시 반영됩니다. 주말은 빨간 머리글.</p>
+    </div>
+  </section>
+
+  <!-- ============ SETTINGS ============ -->
+  <section id="tab-settings" hidden>
+    <div class="card">
+      <h2>기초 시재 · 단위</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;max-width:640px">
+        <div>
+          <label>기준일 (이 날부터 시재 계산)</label>
+          <input type="date" id="s-basedate">
+        </div>
+        <div>
+          <label>기준일 개시 시재 <span class="sub">(전일 마감액)</span></label>
+          <input type="text" id="s-basebal" inputmode="numeric" placeholder="예: 50,000">
+        </div>
+        <div>
+          <label>금액 단위 (표시용)</label>
+          <select id="s-unit">
+            <option>억원</option><option>백만원</option><option>천원</option><option>원</option>
+          </select>
+        </div>
+      </div>
+      <h2 style="margin-top:18px">해외 (USD) 설정</h2>
+      <div class="grid" style="grid-template-columns:1fr 1fr 1fr;max-width:640px">
+        <div>
+          <label>적용 환율 (원/USD)</label>
+          <input type="text" id="s-fx" inputmode="numeric" placeholder="예: 1,350">
+        </div>
+        <div>
+          <label>해외 기초 시재 <span class="sub">(백만USD)</span></label>
+          <input type="text" id="s-ovbal" inputmode="numeric" placeholder="예: 200">
+        </div>
+        <div style="display:flex;align-items:flex-end"><span class="note">해외 입력은 백만USD, 갑지 환산은 억원 기준(=USD×환율÷100)</span></div>
+      </div>
+      <button class="btn" id="s-save" style="margin-top:14px">저장</button>
+    </div>
+    <div class="card">
+      <h2>PJT 관리 <small>이름을 통일해 같은 프로젝트가 다르게 기록되는 걸 막습니다</small></h2>
+      <div id="pjt-manage"></div>
+    </div>
+    <div class="card">
+      <h2>사업부 엑셀 가져오기 <small>월별 PJT 수금/지출 파일을 열 매핑으로 반영</small></h2>
+      <div class="flex">
+        <label class="btn" style="cursor:pointer">📥 엑셀(.xlsx)/CSV 선택
+          <input type="file" id="imp-file" accept=".xlsx,.csv" hidden></label>
+      </div>
+      <p class="note">파일을 고르면 열을 지정(일자·PJT·금액 등)하고 미리보기 후 반영합니다. 어떤 양식이든 열만 맞추면 됩니다.</p>
+    </div>
+    <div class="card">
+      <h2>파일로 데이터 저장 · 복원 <small>다른 PC로 옮길 때 사용하세요</small></h2>
+      <div class="flex">
+        <button class="btn" id="s-backup">💾 데이터 파일로 저장(.json)</button>
+        <label class="btn" style="cursor:pointer;background:#1a7f5a">📂 데이터 파일 불러오기
+          <input type="file" id="s-restore" accept=".json,application/json" hidden></label>
+      </div>
+      <p class="note">모든 입력 내역과 설정(기준일·기초시재·단위)을 파일 하나에 담습니다.
+        다른 PC에서 이 html을 열고 그 파일을 불러오면 그대로 복원됩니다. (불러오기는 기존 데이터를 전부 교체합니다)</p>
+    </div>
+    <div class="card">
+      <h2>엑셀 · CSV · 기타</h2>
+      <div class="flex">
+        <button class="btn sec" id="s-xlsx">엑셀(.xlsx) 내보내기</button>
+        <button class="btn sec" id="s-export">CSV 내보내기</button>
+        <label class="btn sec" style="cursor:pointer">CSV 불러오기(추가)
+          <input type="file" id="s-import" accept=".csv" hidden></label>
+        <button class="btn sec" id="s-sample">샘플 데이터 넣기</button>
+        <button class="btn danger right" id="s-clear">전체 삭제</button>
+      </div>
+      <p class="note">데이터는 기본적으로 이 브라우저에만 저장됩니다. 엑셀/CSV는 표 작업·공유용,
+        위의 “데이터 파일(.json)”은 PC 간 완전 이전·백업용입니다.</p>
+    </div>
+  </section>
+</div>
+
+<div id="cell-modal" class="modal-bg" hidden><div class="modal"></div></div>
+<div id="imp-modal" class="modal-bg" hidden><div class="modal" style="max-width:900px"></div></div>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const KEY_E="jsuji_entries_v1", KEY_S="jsuji_settings_v1";
+
+const CATS={
+  수금:["공사수입(기성)","공사수입(분양금)","공동원가 회입","받을어음 만기","어음 매각분 수금",
+       "국내법인 외화 수금","연결법인 시재 회입","전사BS(이자,전사비 등)","지분 매각","시설 매각",
+       "대여금 회입","사업비 차입","배당수익","기타"],
+  지출:["현장 전도금","현장 대금지급","본사 대금지급","지급어음 만기","처분손실","사업비 대출 이자",
+       "국내 외화 지출","투자지출(지분)","투자지출(시설)","대여금 지출","입찰보증금",
+       "사업비 대출 상환","법인세","배당 지출","전사BS(이자,전사비 등)","기타"]
+};
+// 갑지(보고서) 행 정의: 표시명 ← 상세구분 매핑 (입력 세분과 보고 양식을 분리)
+const GAPJI={
+  입금:[
+    {label:"공사 수입(기성, 분양금)",cats:["공사수입(기성)","공사수입(분양금)"]},
+    {label:"공동원가 회입",cats:["공동원가 회입"]},
+    {label:"받을어음 만기",cats:["받을어음 만기"]},
+    {label:"채권 할인(받을어음 매각)",cats:["어음 매각분 수금"]},
+    {label:"국내 외화 수금",cats:["국내법인 외화 수금"]},
+    {label:"연결법인 시재 회입",cats:["연결법인 시재 회입"]},
+    {label:"전사BS(이자, 전사비 등)",cats:["전사BS(이자,전사비 등)"]},
+    {label:"기타",cats:["기타"]},
+    {label:"지분 매각",cats:["지분 매각"]},
+    {label:"시설 매각",cats:["시설 매각"]},
+    {label:"대여금 회입",cats:["대여금 회입"]},
+    {label:"사업비 차입",cats:["사업비 차입"]},
+    {label:"배당 수익",cats:["배당수익"]},
+  ],
+  지출:[
+    {label:"현장 전도금",cats:["현장 전도금"]},
+    {label:"현장 대금지급",cats:["현장 대금지급"]},
+    {label:"본사 대금지급",cats:["본사 대금지급"]},
+    {label:"지급어음 만기",cats:["지급어음 만기"]},
+    {label:"채권 처분손실",cats:["처분손실"]},
+    {label:"사업비 대출 이자",cats:["사업비 대출 이자"]},
+    {label:"국내 외화 지출",cats:["국내 외화 지출"]},
+    {label:"투자지출(지분/시설)",cats:["투자지출(지분)","투자지출(시설)"]},
+    {label:"대여금 지출",cats:["대여금 지출"]},
+    {label:"입찰보증금",cats:["입찰보증금"]},
+    {label:"사업비 대출 상환",cats:["사업비 대출 상환"]},
+    {label:"법인세",cats:["법인세"]},
+    {label:"배당 지출",cats:["배당 지출"]},
+    {label:"전사BS(이자, 전사비 등)",cats:["전사BS(이자,전사비 등)"]},
+    {label:"기타",cats:["기타"]},
+  ]
+};
+// 해외 (USD 기준)
+const CATS_OV={
+  수금:["단독 입금","JV입금","기타 수금"],
+  지출:["현장 전도금","업체 대금 지급","JV출금","기타","국내 회입(시재 회수)"]
+};
+const GAPJI_OV={
+  입금:[
+    {label:"단독 입금",cats:["단독 입금"]},
+    {label:"JV입금",cats:["JV입금"]},
+    {label:"기타 수금",cats:["기타 수금"]},
+  ],
+  지출:[
+    {label:"현장 전도금",cats:["현장 전도금"]},
+    {label:"업체 대금 지급",cats:["업체 대금 지급"]},
+    {label:"JV출금",cats:["JV출금"]},
+    {label:"기타",cats:["기타"]},
+    {label:"국내 회입(시재 회수)",cats:["국내 회입(시재 회수)"]},
+  ]
+};
+const REPAT="국내 회입(시재 회수)"; // 해외 시재 회수 → 국내 연결법인 시재 회입
+const GAPJI_W=[190,92,70,70,88,210,84,210]; // 갑지 열 기본 너비(px)
+const FCW=[112,90,90,90,110,360]; // 10영업일 전망 열 기본 너비(px)
+
+const KEY_M="jsuji_manual_v1";
+let entries=load(KEY_E,[]);
+let settings=load(KEY_S,{baseDate:isoToday(),baseBalance:0,unit:"억원"});
+// 신규 설정 기본값 보정
+if(settings.unit==="백만원"&&!settings.unitFixed){settings.unit="억원";}
+settings.unitFixed=true;
+if(settings.fx==null)settings.fx=1350;
+if(settings.ovBaseBalance==null)settings.ovBaseBalance=0;
+if(settings.ytdBaseDate==null)settings.ytdBaseDate="2026-07-01";
+if(settings.naeBase==null)settings.naeBase=0;
+if(!settings.gapjiW||typeof settings.gapjiW!=="object")settings.gapjiW={};
+if(settings.ovCollapsed==null)settings.ovCollapsed=true;
+if(!settings.fcNotes||typeof settings.fcNotes!=="object")settings.fcNotes={};
+if(!settings.fcW||typeof settings.fcW!=="object")settings.fcW={};
+if(!settings.fcNoteCount)settings.fcNoteCount=2;
+if(!settings.ytdBase)settings.ytdBase={국내:{},해외:{}};
+if(!settings.ytdBase.국내)settings.ytdBase.국내={};
+if(!settings.ytdBase.해외)settings.ytdBase.해외={};
+// 기존 항목 region 보정
+entries.forEach(e=>{if(!e.region)e.region="국내";});
+// PJT 등록 목록 (입력 세부 중 아래 항목만 PJT 사용)
+if(!settings.projects)settings.projects=[];
+{const ps=[...new Set(entries.filter(e=>e.project).map(e=>e.project))];
+ settings.projects=[...new Set([...settings.projects,...ps])].sort((a,b)=>a.localeCompare(b,"ko"));}
+const PJT_CATS=["공사수입(기성)","공사수입(분양금)","공동원가 회입","대여금 회입","사업비 차입"];
+// PJT 수금실적 화면 열 정의
+const PJT_SUGUM=[
+  {label:"공사 수입(기성, 분양금)",cats:["공사수입(기성)","공사수입(분양금)"]},
+  {label:"공동원가 회입",cats:["공동원가 회입"]},
+  {label:"받을어음 만기",cats:["받을어음 만기"]},
+  {label:"대여금 회입",cats:["대여금 회입"]},
+];
+let manual=load(KEY_M,{});         // manual[region][date]={diff:{label:num},note:{label:str}}
+let form={region:"국내",type:"수금",plan:"전망"};
+let editingId=null;
+function mget(region,date){manual[region]=manual[region]||{};
+  manual[region][date]=manual[region][date]||{diff:{},note:{}};
+  const m=manual[region][date];m.diff=m.diff||{};m.note=m.note||{};return m;}
+function saveM(){localStorage.setItem(KEY_M,JSON.stringify(manual));}
+function usdToUk(usdM,fx){return usdM*((Number(fx)||Number(settings.fx))||0)/100;} // 백만USD → 억원 (건별 fx 우선)
+/* 국내 유효내역 = 국내 입력 + (해외 시재회수 → 연결법인 시재 회입 환산분, 회입시점 환율 적용) */
+function DOM(){
+  const syn=entries.filter(e=>e.region==="해외"&&e.category===REPAT).map(e=>({
+    id:e.id+"_syn",date:e.date,type:"수금",category:"연결법인 시재 회입",project:"",
+    plan:e.plan,amount:usdToUk(e.amount,e.fx),memo:"해외 시재 회입 환산",region:"국내",_syn:true}));
+  return entries.filter(e=>e.region!=="해외").concat(syn);
+}
+function OV(){return entries.filter(e=>e.region==="해외");}
+
+function load(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch(e){return d}}
+function save(){localStorage.setItem(KEY_E,JSON.stringify(entries));
+  localStorage.setItem(KEY_S,JSON.stringify(settings));}
+function isoToday(){const d=new Date();return d.toISOString().slice(0,10);}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function fmt(n){n=Math.round(n);return n<0?"△"+Math.abs(n).toLocaleString("ko-KR"):n.toLocaleString("ko-KR");}
+function parseNum(s){s=String(s);const neg=/[△▲-]/.test(s);const n=Number(s.replace(/[^0-9.]/g,""))||0;return neg?-n:n;}
+function esc(s){return String(s??"").replace(/[<>&"]/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;"}[c]));}
+function signed(e){return e.type==="수금"?e.amount:-e.amount;}
+
+/* ---------- tabs ---------- */
+$$(".tabs button").forEach(b=>b.onclick=()=>{
+  $$(".tabs button").forEach(x=>x.classList.remove("on"));b.classList.add("on");
+  ["input","gapji","daily","board","trend","pjt","pjtsu","settings"].forEach(t=>$("#tab-"+t).hidden=(t!==b.dataset.tab));
+  if(b.dataset.tab==="gapji")renderGapji();
+  if(b.dataset.tab==="daily")renderDaily();
+  if(b.dataset.tab==="board")renderBoard();
+  if(b.dataset.tab==="trend")renderTrend();
+  if(b.dataset.tab==="pjt")renderPjt();
+  if(b.dataset.tab==="pjtsu")renderPjtSugum();
+  if(b.dataset.tab==="settings")renderPjtManage();
+});
+
+/* ---------- input form ---------- */
+$("#f-date").value=isoToday();
+function segBind(sel,key,onIn,onOut){
+  $$(sel+" button").forEach(b=>b.onclick=()=>{
+    form[key]=b.dataset.v;
+    $$(sel+" button").forEach(x=>x.className="");
+    b.classList.add(b.dataset.v==="수금"?"on-in":b.dataset.v==="지출"?"on-out":"on-plan");
+    if(sel==="#f-type")syncCat();
+  });
+}
+segBind("#f-type","type");segBind("#f-plan","plan");
+$$("#f-region button").forEach(b=>b.onclick=()=>{form.region=b.dataset.v;syncCat();});
+function needPjt(){return form.region==="국내"&&form.type==="수금"&&PJT_CATS.includes($("#f-cat").value);}
+function fillPjtSelect(){
+  const cur=$("#f-pjt").value;
+  const opts=(settings.projects||[]).map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join("");
+  $("#f-pjt").innerHTML=opts+`<option value="__new__">＋ 새 PJT 등록…</option>`;
+  if(cur&&[...settings.projects,"__new__"].includes(cur))$("#f-pjt").value=cur;
+}
+function needFx(){return form.region==="해외"&&form.type==="지출"&&$("#f-cat").value===REPAT;}
+function syncCatDeps(){
+  $("#f-pjt-box").style.display=needPjt()?"":"none";
+  $("#f-fx-box").style.display=needFx()?"":"none";
+  if(needFx()&&!$("#f-fx").value)$("#f-fx").value=fmt(settings.fx);
+}
+function syncPjtVis(){syncCatDeps();}
+function syncCat(){
+  const ov=form.region==="해외";
+  const cats=(ov?CATS_OV:CATS)[form.type];
+  $("#f-cat").innerHTML=cats.map(c=>`<option>${c}</option>`).join("");
+  syncCatDeps();
+  $("#fx-hint").style.display=ov?"":"none";
+  $("#unit-lbl2").textContent=ov?"(백만USD)":"("+settings.unit+")";
+  $("#f-amount").placeholder=ov?"예: 20 (백만불)":"예: 1,200";
+  $$("#f-region button").forEach(b=>b.className=b.dataset.v===form.region?"on-plan":"");
+  $$("#f-type button").forEach(b=>b.className=b.dataset.v===form.type?(form.type==="수금"?"on-in":"on-out"):"");
+  $$("#f-plan button").forEach(b=>b.className=b.dataset.v===form.plan?"on-plan":"");
+}
+function editEntry(id){
+  const e=entries.find(x=>x.id===id);if(!e)return;
+  form.region=e.region||"국내";form.type=e.type;form.plan=e.plan;
+  syncCat();
+  $("#f-cat").value=e.category;syncCatDeps();
+  $("#f-date").value=e.date;
+  $("#f-amount").value=e.amount?fmt(e.amount):"";
+  $("#f-memo").value=e.memo||"";
+  if(needPjt()){
+    if(e.project&&!settings.projects.includes(e.project)){settings.projects.push(e.project);
+      settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));}
+    fillPjtSelect();$("#f-pjt").value=e.project||"";
+  }
+  if(needFx())$("#f-fx").value=e.fx?fmt(e.fx):fmt(settings.fx);
+  editingId=id;
+  $("#f-add").textContent="수정 저장";$("#f-cancel").style.display="";
+  $("#tab-input").scrollIntoView({behavior:"smooth",block:"start"});
+}
+function cancelEdit(){editingId=null;$("#f-add").textContent="＋ 추가";
+  $("#f-cancel").style.display="none";$("#f-amount").value="";$("#f-memo").value="";$("#f-fx").value="";}
+$("#f-cancel").onclick=cancelEdit;
+$("#f-cat").onchange=syncPjtVis;
+$("#f-pjt").onchange=()=>{
+  if($("#f-pjt").value!=="__new__")return;
+  const name=(prompt("새 PJT 이름을 입력하세요 (예: 강동1)")||"").trim();
+  if(name){
+    if(!settings.projects.includes(name)){settings.projects.push(name);
+      settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));save();renderPjtManage();}
+    fillPjtSelect();$("#f-pjt").value=name;
+  }else{fillPjtSelect();$("#f-pjt").value=settings.projects[0]||"__new__";}
+};
+function refreshPjtList(){
+  const ps=[...new Set(entries.filter(e=>e.project).map(e=>e.project))];
+  settings.projects=[...new Set([...(settings.projects||[]),...ps])].sort((a,b)=>a.localeCompare(b,"ko"));
+  fillPjtSelect();
+}
+$("#f-add").onclick=()=>{
+  const amt=parseNum($("#f-amount").value);
+  if(!amt){$("#f-amount").focus();return;}
+  let pjt="";
+  if(needPjt()){pjt=$("#f-pjt").value;
+    if(!pjt||pjt==="__new__"){alert("이 항목은 PJT를 선택(또는 등록)해야 합니다.");$("#f-pjt").focus();return;}}
+  const fxv=needFx()?(parseNum($("#f-fx").value)||Number(settings.fx)):undefined;
+  if(editingId){
+    const e=entries.find(x=>x.id===editingId);
+    if(e){e.date=$("#f-date").value||isoToday();e.region=form.region;e.type=form.type;
+      e.category=$("#f-cat").value;e.project=pjt;e.plan=form.plan;e.amount=amt;e.memo=$("#f-memo").value.trim();
+      if(fxv!==undefined)e.fx=fxv;else delete e.fx;}
+    cancelEdit();save();renderRecent();
+    $("#f-amount").focus();return;
+  }
+  const ne={id:uid(),date:$("#f-date").value||isoToday(),region:form.region,type:form.type,
+    category:$("#f-cat").value,project:pjt,
+    plan:form.plan,amount:amt,memo:$("#f-memo").value.trim()};
+  if(fxv!==undefined)ne.fx=fxv;
+  entries.push(ne);
+  save();$("#f-amount").value="";$("#f-memo").value="";
+  renderRecent();
+  $("#f-amount").focus();
+};
+$("#f-amount").addEventListener("keydown",e=>{if(e.key==="Enter")$("#f-add").click();});
+
+function renderRecent(){
+  const rows=[...entries].sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,40);
+  $("#recent-count").textContent="총 "+entries.length+"건";
+  if(!rows.length){$("#recent-tbl").innerHTML='<tr><td class="empty">아직 입력이 없습니다</td></tr>';return;}
+  $("#recent-tbl").innerHTML=
+    `<thead><tr><th class="lft">일자</th><th class="lft">내역</th><th>금액</th><th></th></tr></thead><tbody>`+
+    rows.map(e=>`<tr>
+      <td class="lft mut">${e.date.slice(5)}</td>
+      <td class="lft">${e.region==="해외"?`<span class="pill" style="background:#eef;color:#437">해외</span> `:""}<span class="pill ${e.type==='수금'?'in':'out'}">${e.type}</span>
+        <span class="pill ${e.plan==='전망'?'plan':'real'}">${e.plan}</span>
+        ${esc(e.category)}${e.project?` · <span class="mut">${esc(e.project)}</span>`:""}
+        ${e.memo?`<div class="sub">${esc(e.memo)}</div>`:""}</td>
+      <td class="num ${e.type==='수금'?'in':'out'}">${fmt(e.amount)}${e.region==="해외"?'<span class="sub"> $</span>':''}</td>
+      <td style="white-space:nowrap"><button class="btn sec sm" data-edit="${e.id}" title="수정">✎</button>
+        <button class="btn danger sm" data-del="${e.id}" title="삭제">×</button></td></tr>`).join("")+`</tbody>`;
+  $$("#recent-tbl [data-edit]").forEach(b=>b.onclick=()=>editEntry(b.dataset.edit));
+  $$("#recent-tbl [data-del]").forEach(b=>b.onclick=()=>{
+    if(editingId===b.dataset.del)cancelEdit();
+    entries=entries.filter(e=>e.id!==b.dataset.del);save();renderRecent();refreshPjtList();});
+}
+
+/* ---------- balance engine ---------- */
+function includeEntry(e,mode,today){
+  if(mode==="actual")return e.plan==="실적";
+  if(mode==="forecast")return e.plan==="전망";
+  return e.plan==="실적" ? true : e.date>=today;   // mixed
+}
+// closing balance up to & including date D (국내 KRW, 해외 회입 환산 포함)
+function balanceAsOf(D,mode){
+  const today=isoToday();let b=settings.baseBalance;
+  for(const e of DOM()){
+    if(e.date<settings.baseDate||e.date>D)continue;
+    if(includeEntry(e,mode,today))b+=signed(e);
+  }
+  return b;
+}
+// 해외 시재 (USD, 백만불)
+function ovBalanceAsOf(D,mode){
+  const today=isoToday();let b=Number(settings.ovBaseBalance)||0;
+  for(const e of OV()){
+    if(e.date<settings.baseDate||e.date>D)continue;
+    if(includeEntry(e,mode,today))b+=signed(e);
+  }
+  return b;
+}
+
+/* ---------- board ---------- */
+$("#board-date").value=isoToday();
+$("#board-date").onchange=renderBoard;$("#board-mode").onchange=renderBoard;
+function boardTable(type,date){
+  const dom=DOM();
+  const rows=CATS[type].map(cat=>{
+    const es=dom.filter(e=>e.type===type&&e.category===cat&&e.date===date);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {cat,plan,real};
+  }).filter(r=>r.plan||r.real);
+  const tp=rows.reduce((s,r)=>s+r.plan,0),tr=rows.reduce((s,r)=>s+r.real,0);
+  const cls=type==="수금"?"in":"out";
+  let h=`<thead><tr><th class="lft">상세구분</th><th>전망</th><th>실적</th></tr></thead><tbody>`;
+  if(!rows.length)h+=`<tr><td colspan="3" class="empty">내역 없음</td></tr>`;
+  else h+=rows.map(r=>`<tr><td class="lft">${esc(r.cat)}</td>
+      <td class="num mut">${r.plan?fmt(r.plan):"-"}</td>
+      <td class="num ${cls}">${r.real?fmt(r.real):"-"}</td></tr>`).join("");
+  h+=`<tr class="row-tot"><td class="lft">합계</td><td class="num">${fmt(tp)}</td><td class="num ${cls}">${fmt(tr)}</td></tr></tbody>`;
+  return {html:h,plan:tp,real:tr};
+}
+function renderBoard(){
+  const date=$("#board-date").value||isoToday(),mode=$("#board-mode").value;
+  const bi=boardTable("수금",date),bo=boardTable("지출",date);
+  $("#board-in").innerHTML=bi.html;$("#board-out").innerHTML=bo.html;
+  // day figures per mode
+  const today=isoToday();
+  const dayEntries=DOM().filter(e=>e.date===date&&includeEntry(e,mode,today));
+  const inSum=dayEntries.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+  const outSum=dayEntries.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+  const prev=balanceAsOf(prevDay(date),mode);
+  $("#b-prev").textContent=fmt(prev);
+  $("#b-in").textContent="＋ "+fmt(inSum);
+  $("#b-out").textContent="－ "+fmt(outSum);
+  $("#b-close").textContent=fmt(prev+inSum-outSum);
+}
+function prevDay(d){const x=new Date(d+"T00:00:00");x.setDate(x.getDate()-1);return x.toISOString().slice(0,10);}
+
+/* ---------- 갑지 (일일 보고) ---------- */
+$("#g-date").value=isoToday();
+$("#g-date").onchange=renderGapji;
+function prevBizDay(iso){let d=new Date(iso+"T12:00:00");
+  do{d.setDate(d.getDate()-1);}while(d.getDay()===0||d.getDay()===6);return fmtDate(d);}
+function gapjiCalc(region,D){
+  const data=region==="해외"?OV():DOM();
+  const defs=region==="해외"?GAPJI_OV:GAPJI;
+  const prev=prevBizDay(D),base=settings.ytdBase[region]||{},m=mget(region,D);
+  const line=(type,cats,label)=>{
+    const hit=e=>e.type===type&&cats.includes(e.category);
+    const sum=f=>data.filter(e=>hit(e)&&f(e)).reduce((s,e)=>s+e.amount,0);
+    const pPlan=sum(e=>e.plan==="전망"&&e.date===prev);
+    const pReal=sum(e=>e.plan==="실적"&&e.date===prev);
+    const tPlan=sum(e=>e.plan==="전망"&&e.date===D);
+    // '26년 실적 = 기초값 + 전일 실적 (해외는 억원 환산)
+    const ytd=(Number(base[label])||0)+(region==="해외"?usdToUk(pReal):pReal);
+    let auto="";
+    if(type==="수금"){
+      auto=data.filter(e=>hit(e)&&e.plan==="전망"&&e.date===D).sort((a,b)=>b.amount-a.amount)
+        .slice(0,settings.fcNoteCount||2).map(e=>`${e.memo||e.project||label}_${fmt(e.amount)}`).join(", ");
+    }
+    const note=(label in m.note)?m.note[label]:auto;
+    const diff=(label in m.diff)?String(m.diff[label]):"";  // 계획대비 주요 차이(수기 텍스트)
+    return {label,ytd,pPlan,pReal,tPlan,diff,note};
+  };
+  const build=(blk,type)=>blk.map(l=>line(type,l.cats,l.label));
+  return {입금:build(defs.입금,"수금"),지출:build(defs.지출,"지출"),prev,D,region};
+}
+function gTot(rows){return rows.reduce((a,r)=>({ytd:a.ytd+r.ytd,pPlan:a.pPlan+r.pPlan,
+  pReal:a.pReal+r.pReal,tPlan:a.tPlan+r.tPlan}),{ytd:0,pPlan:0,pReal:0,tPlan:0});}
+function planVarHtml(plan,real){if(!plan&&!real)return "-";const d=real-plan;
+  return `<span class="${d<0?'out':d>0?'in':''}">${d>0?"+"+fmt(d):fmt(d)}</span>`;}
+function gapjiHtml(D,region){
+  region=region||"국내";
+  const g=gapjiCalc(region,D),yr=D.slice(2,4),pd=g.prev.slice(8,10),dd=D.slice(8,10),ov=region==="해외";
+  const eD=r=>`<textarea class="g-edit atxt lft" data-r="${region}" data-d="${D}" data-k="diff" data-l="${esc(r.label)}" rows="1">${esc(r.diff)}</textarea>`;
+  const eN=r=>`<textarea class="g-edit atxt lft" data-r="${region}" data-d="${D}" data-k="note" data-l="${esc(r.label)}" rows="1">${esc(r.note)}</textarea>`;
+  const rowHtml=r=>`<tr><td class="lft">${esc(r.label)}</td>
+      <td class="num">${r.ytd?fmt(r.ytd):"-"}</td>
+      <td class="num mut">${r.pPlan?fmt(r.pPlan):"-"}</td>
+      <td class="num">${r.pReal?fmt(r.pReal):"-"}</td>
+      <td class="num">${planVarHtml(r.pPlan,r.pReal)}</td>
+      <td class="memo">${eD(r)}</td>
+      <td class="num">${r.tPlan?fmt(r.tPlan):"-"}</td>
+      <td class="memo">${eN(r)}</td></tr>`;
+  const totHtml=(label,t)=>`<tr class="row-tot"><td class="lft">${label}</td>
+      <td class="num">${fmt(t.ytd)}</td><td class="num">${fmt(t.pPlan)}</td>
+      <td class="num">${fmt(t.pReal)}</td><td class="num">${planVarHtml(t.pPlan,t.pReal)}</td>
+      <td class="memo"></td>
+      <td class="num">${fmt(t.tPlan)}</td><td class="memo"></td></tr>`;
+  const inT=gTot(g.입금),outT=gTot(g.지출);
+  // 국내 시재(사내예금/사내차입금) = 기초값 + '26 수지차, 금일 = +금일 수지차 (국내 갑지만)
+  const naeYtd=(Number(settings.naeBase)||0)+(inT.ytd-outT.ytd);
+  const naeToday=naeYtd+(inT.tPlan-outT.tPlan);
+  const naeRow=ov?"":`<tr class="row-tot" style="background:#e7f6ef">
+      <td class="lft">국내 시재 (사내예금/사내차입금)</td>
+      <td class="num">${fmt(naeYtd)}</td>
+      <td class="num mut">-</td><td class="num">-</td><td class="num">-</td><td class="num">-</td>
+      <td class="num">${fmt(naeToday)}</td><td class="memo"></td></tr>`;
+  const title=ov?"해외 자금수지 현황":"일일 자금수지 현황";
+  const unit=ov?"백만USD · 환산 억원 = USD×환율÷100":"단위: "+esc(settings.unit);
+  let sum;
+  if(ov){
+    const pv=ovBalanceAsOf(g.prev,"actual"),tb=pv+inT.tPlan-outT.tPlan;
+    sum=`<div class="g-sum">
+      <div class="kpi"><div class="lbl">전일 해외시재(USD)</div><div class="val num">${fmt(pv)}</div></div>
+      <div class="kpi"><div class="lbl">금일 입금(계획,USD)</div><div class="val num in">${fmt(inT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 지출(계획,USD)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 예상 해외시재</div><div class="val num">${fmt(tb)}<span class="sub"> ≈ ${fmt(usdToUk(tb))}억</span></div></div>
+    </div>
+    <p class="note">기본환율 ${fmt(settings.fx)}원/USD. ‘'26년 실적’은 억원(기초값+실적 환산), 그 외 열은 USD 기준입니다. ‘국내 회입(시재 회수)’은 <b>회입 건별 환율</b>로 환산되어 국내 갑지 ‘연결법인 시재 회입’에 자동 반영됩니다(환율은 현황판 셀·입력에서 지정).</p>`;
+  }else{
+    sum=`<div class="g-sum">
+      <div class="kpi"><div class="lbl">전일 시재(실적)</div><div class="val num">${fmt(naeYtd)}</div></div>
+      <div class="kpi"><div class="lbl">금일 입금(계획)</div><div class="val num in">${fmt(inT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 지출(계획)</div><div class="val num out">${fmt(outT.tPlan)}</div></div>
+      <div class="kpi"><div class="lbl">금일 예상 시재</div><div class="val num">${fmt(naeToday)}</div></div>
+    </div>
+    <p class="note">전일=직전 영업일(${g.prev}). 계획=전망, 실적=실적. ‘차이’ 칸은 계획대비 주요 사항을 직접 적는 곳이며, ‘내용’ 칸도 수기 입력할 수 있습니다(입금 내용은 큰 건 2개 자동).</p>`;
+  }
+  const rs=i=>`<div class="colrs" data-col="${i}" data-w="gapjiW"></div>`;
+  return `<div class="g-title"><h3>${title}</h3><div class="d">${D}${ov?" · 해외":""}</div></div>
+    <div class="g-unit">(${unit})</div>
+    <div style="overflow:auto"><table class="gapji">
+    <colgroup>${GAPJI_W.map((d,i)=>`<col style="width:${(settings.gapjiW[i]||d)}px">`).join("")}</colgroup>
+    <thead>
+      <tr><th class="lft" rowspan="2">구분${rs(0)}</th><th rowspan="2">'${yr}년 실적${ov?"<br><span style='font-weight:400;font-size:10px'>(억원)</span>":""}${rs(1)}</th>
+        <th colspan="4">전일 계획/실적 (${pd}일)</th>
+        <th colspan="2">금일 계획 (${dd}일)</th></tr>
+      <tr><th>계획${rs(2)}</th><th>실적${rs(3)}</th><th>계획比${rs(4)}</th><th>차이${rs(5)}</th>
+        <th>계획${rs(6)}</th><th class="lft">내용${rs(7)}</th></tr>
+    </thead><tbody>
+    <tr class="grp"><td colspan="8">입금${ov?" (USD)":""}</td></tr>
+    ${g.입금.map(rowHtml).join("")}
+    ${totHtml("입금 계",inT)}
+    <tr class="grp"><td colspan="8">지출${ov?" (USD)":""}</td></tr>
+    ${g.지출.map(rowHtml).join("")}
+    ${totHtml("지출 계",outT)}
+    ${naeRow}
+    </tbody></table></div>
+    ${sum}`;
+}
+/* 갑지 수기 입력(차이·내용) 저장 */
+document.addEventListener("change",ev=>{
+  const el=ev.target;if(!el.classList||!el.classList.contains("g-edit"))return;
+  const m=mget(el.dataset.r,el.dataset.d),label=el.dataset.l;
+  if(el.dataset.k==="diff")m.diff[label]=el.value;
+  else m.note[label]=el.value;
+  saveM();setTimeout(renderReports,0);
+});
+/* 전망 주요 내역 수기 수정 */
+document.addEventListener("change",ev=>{
+  const el=ev.target;if(!el.classList||!el.classList.contains("fc-note"))return;
+  const iso=el.dataset.iso,v=el.value;
+  if(v.trim()==="")delete settings.fcNotes[iso];else settings.fcNotes[iso]=v;
+  save();
+});
+/* 주요 내역 표시 건수 */
+document.addEventListener("change",ev=>{
+  if(ev.target.id!=="fc-count")return;
+  settings.fcNoteCount=parseInt(ev.target.value)||2;save();renderReports();
+});
+/* '26년 실적 기초값 입력 */
+document.addEventListener("change",ev=>{
+  const el=ev.target;if(!el.classList||!el.classList.contains("g-ytd"))return;
+  const r=el.dataset.r,label=el.dataset.l,v=el.value.trim();
+  settings.ytdBase[r]=settings.ytdBase[r]||{};
+  if(v==="")delete settings.ytdBase[r][label];else settings.ytdBase[r][label]=parseNum(v);
+  save();setTimeout(renderReports,0);
+});
+function renderYtdPanel(){
+  $("#g-ytd-date").value=settings.ytdBaseDate;
+  $("#g-nae-base").value=fmt(settings.naeBase||0);
+  const tbl=(region,defs)=>{
+    const rows=[...defs.입금,...defs.지출].map(l=>{const v=settings.ytdBase[region][l.label];
+      return `<tr><td class="lft">${esc(l.label)}</td>
+        <td style="text-align:right"><input class="g-ytd" data-r="${region}" data-l="${esc(l.label)}" style="width:110px;text-align:right" value="${v!=null?fmt(v):''}"></td></tr>`;
+    }).join("");
+    return `<div><strong style="font-size:12.5px">${region} (억원)</strong>
+      <table style="margin-top:4px"><tbody>${rows}</tbody></table></div>`;
+  };
+  $("#g-ytd-inputs").innerHTML=`<div class="grid" style="grid-template-columns:1fr 1fr;gap:18px">${tbl("국내",GAPJI)}${tbl("해외",GAPJI_OV)}</div>`;
+}
+$("#g-ytd-date").onchange=()=>{settings.ytdBaseDate=$("#g-ytd-date").value;save();renderReports();};
+$("#g-nae-base").onchange=()=>{settings.naeBase=parseNum($("#g-nae-base").value);save();setTimeout(renderReports,0);};
+/* 향후 N영업일 전망 (주말 제외) */
+function fmtDate(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function bizDays(startISO,n){
+  const W=["일","월","화","수","목","금","토"],out=[];
+  let d=new Date(startISO+"T12:00:00");
+  while(out.length<n){const w=d.getDay();if(w!==0&&w!==6)out.push({iso:fmtDate(d),dow:W[w]});d.setDate(d.getDate()+1);}
+  return out;
+}
+function forecastCalc(D,n){
+  const days=bizDays(D,n),today=isoToday(),dom=DOM();
+  // 국내 시재 기준: 기준 시재 = 갑지 국내시재 '26 실적(=기초값+'26 수지차, 전일까지), 이후 일별 수지차 누적
+  const g=gapjiCalc("국내",D),inY=gTot(g.입금),outY=gTot(g.지출);
+  const startBal=(Number(settings.naeBase)||0)+(inY.ytd-outY.ytd);
+  const naeRun=x=>{let b=startBal;for(const e of dom){if(e.date>=D&&e.date<=x&&includeEntry(e,"forecast",today))b+=signed(e);}return b;};
+  let ti=0,to=0,min=Infinity,minDay="";
+  const rows=days.map(x=>{
+    const de=dom.filter(e=>e.date===x.iso&&includeEntry(e,"forecast",today));
+    const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+    const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+    const bal=naeRun(x.iso);
+    ti+=i;to+=o;if(bal<min){min=bal;minDay=x.iso;}
+    // 주요 내역: 큰 건 N개 (설정, 수기 수정 가능)
+    const auto=de.slice().sort((a,b)=>b.amount-a.amount).slice(0,settings.fcNoteCount||2)
+      .map(e=>`${e.memo||e.project||e.category}_${fmt(e.type==="지출"?-e.amount:e.amount)}`).join(", ");
+    const note=(x.iso in settings.fcNotes)?settings.fcNotes[x.iso]:auto;
+    return {iso:x.iso,dow:x.dow,i,o,net:i-o,bal,note};
+  });
+  return {days,rows,startBal,ti,to,min,minDay};
+}
+function miniLine(vals,labels){
+  const W=920,H=168,pad={l:66,r:12,t:12,b:40};
+  let mn=Math.min(...vals,0),mx=Math.max(...vals,1);if(mn===mx)mx=mn+1;
+  const px=i=>pad.l+(W-pad.l-pad.r)*(i/(vals.length-1||1));
+  const py=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
+  const pts=vals.map((v,i)=>px(i).toFixed(1)+","+py(v).toFixed(1)).join(" ");
+  let g="";for(let k=0;k<=3;k++){const v=mn+(mx-mn)*k/3,y=py(v);
+    g+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eef1f6"/><text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#98a2b3">${fmt(v)}</text>`;}
+  const dots=vals.map((v,i)=>`<circle cx="${px(i)}" cy="${py(v)}" r="2.6" fill="${v<0?'#c0392b':'#2f6fb0'}"/>`).join("");
+  let xl="";if(labels)labels.forEach((lb,i)=>{const x=px(i);
+    xl+=`<line x1="${x}" y1="${py(mn)}" x2="${x}" y2="${py(mn)+4}" stroke="#cbd3df"/>`+
+        `<text x="${x}" y="${H-16}" text-anchor="middle" font-size="10" fill="#6b7688">${esc(lb.d)}</text>`+
+        `<text x="${x}" y="${H-4}" text-anchor="middle" font-size="9" fill="#98a2b3">${esc(lb.w)}</text>`;});
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:auto">${g}`+
+    (mn<0?`<line x1="${pad.l}" y1="${py(0)}" x2="${W-pad.r}" y2="${py(0)}" stroke="#c0392b" stroke-dasharray="3 3"/>`:"")+
+    `<polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>${dots}${xl}</svg>`;
+}
+function forecastHtml(D){
+  const f=forecastCalc(D,10),warn=f.min<0;
+  const rz=i=>`<div class="colrs" data-col="${i}" data-w="fcW"></div>`;
+  const kpi=(l,v,c)=>`<div class="kpi"><div class="lbl">${l}</div><div class="val num ${c||''}">${v}</div></div>`;
+  const body=f.rows.map(r=>`<tr${r.bal<0?' style="background:#fdecea"':''}>
+      <td class="lft">${r.iso.slice(5)} (${r.dow})</td>
+      <td class="num in">${r.i?fmt(r.i):"-"}</td>
+      <td class="num out">${r.o?fmt(r.o):"-"}</td>
+      <td class="num ${r.net>=0?'in':'out'}">${r.net?fmt(r.net):"-"}</td>
+      <td class="num" style="${r.bal<0?'color:#c0392b;font-weight:800':''}">${fmt(r.bal)}</td>
+      <td class="memo"><textarea class="fc-note atxt" data-iso="${r.iso}" rows="1">${esc(r.note)}</textarea></td></tr>`).join("");
+  const cntOpt=[1,2,3,4,5].map(n=>`<option value="${n}"${(settings.fcNoteCount||2)===n?" selected":""}>${n}건</option>`).join("");
+  return `<h2>향후 10영업일 자금 전망 <small>주말 제외 · 국내 시재 기준(미래=계획)</small><span style="float:right;font-weight:400;font-size:12.5px">주요 내역 표시 <select id="fc-count" style="width:auto">${cntOpt}</select></span></h2>
+    <div class="kpis">
+      ${kpi("기준 시재",fmt(f.startBal))}
+      ${kpi("10일 입금(계획)",fmt(f.ti),"in")}
+      ${kpi("10일 지출(계획)",fmt(f.to),"out")}
+      ${kpi("최저 예상 시재",fmt(f.min)+(f.minDay?" ("+f.minDay.slice(5)+")":""),warn?"out":"")}
+    </div>
+    ${warn?`<p class="note" style="color:#c0392b;font-weight:700">⚠ ${f.minDay.slice(5)}에 예상 시재가 마이너스입니다. 자금 조달·집행 조정이 필요합니다.</p>`:""}
+    <div class="card" style="box-shadow:none;background:#fbfcfe"><h2 style="font-size:13px">예상 시재 추이 (10영업일)</h2>${miniLine(f.rows.map(r=>r.bal),f.rows.map(r=>({d:r.iso.slice(5),w:r.dow})))}</div>
+    <div style="overflow:auto"><table class="rztbl">
+      <colgroup>${FCW.map((d,i)=>`<col style="width:${(settings.fcW[i]||d)}px">`).join("")}</colgroup>
+      <thead><tr><th class="lft">일자(요일)${rz(0)}</th><th>입금${rz(1)}</th><th>지출${rz(2)}</th><th>순증감${rz(3)}</th><th>예상 시재${rz(4)}</th><th class="lft">주요 내역 <span class="sub" style="font-weight:400">(수기 수정)</span>${rz(5)}</th></tr></thead>
+      <tbody>${body}
+      <tr class="row-tot"><td class="lft">합계</td><td class="num in">${fmt(f.ti)}</td>
+        <td class="num out">${fmt(f.to)}</td><td class="num">${fmt(f.ti-f.to)}</td>
+        <td class="num">${fmt(f.rows.length?f.rows[f.rows.length-1].bal:f.startBal)}</td><td class="memo"></td></tr></tbody></table></div>`;
+}
+function renderReports(){
+  const D=$("#g-date").value||isoToday();
+  $("#g-report").innerHTML=gapjiHtml(D,"국내");
+  $("#g-overseas").innerHTML=settings.ovCollapsed?"":gapjiHtml(D,"해외");
+  $("#g-forecast").innerHTML=forecastHtml(D);
+  wireGapjiResizers();applyOvCollapse();growFcNotes();
+}
+function growFcNotes(){$$("#g-report .atxt,#g-overseas .atxt,#g-forecast .atxt").forEach(t=>{t.style.height="auto";t.style.height=t.scrollHeight+"px";});}
+document.addEventListener("input",ev=>{const el=ev.target;
+  if(el.classList&&el.classList.contains("atxt")){el.style.height="auto";el.style.height=el.scrollHeight+"px";}});
+function applyOvCollapse(){
+  const c=settings.ovCollapsed;
+  $("#g-overseas").style.display=c?"none":"";
+  $("#g-ov-caret").textContent=c?"▸":"▾";
+}
+$("#g-ov-bar").onclick=()=>{settings.ovCollapsed=!settings.ovCollapsed;save();renderReports();};
+function wireGapjiResizers(){
+  $$("#g-report .colrs,#g-overseas .colrs,#g-forecast .colrs").forEach(h=>{
+    h.onmousedown=ev=>{
+      ev.preventDefault();ev.stopPropagation();
+      const table=h.closest("table"),i=+h.dataset.col,store=h.dataset.w||"gapjiW";
+      const col=table.querySelectorAll("colgroup col")[i];
+      const startX=ev.clientX,startW=col.getBoundingClientRect().width;
+      const move=e=>{const w=Math.max(40,Math.round(startW+(e.clientX-startX)));
+        col.style.width=w+"px";settings[store][i]=w;};
+      const up=()=>{document.removeEventListener("mousemove",move);document.removeEventListener("mouseup",up);
+        document.body.style.cursor="";save();};
+      document.body.style.cursor="col-resize";
+      document.addEventListener("mousemove",move);document.addEventListener("mouseup",up);
+    };
+  });
+}
+$("#g-wreset").onclick=()=>{settings.gapjiW={};settings.fcW={};save();renderReports();};
+/* 갑지 화면 그대로 PNG 캡쳐 (라이브러리 없이 SVG foreignObject) */
+function cloneForCapture(node){
+  const clone=node.cloneNode(true);
+  const oi=node.querySelectorAll("input,select,textarea"),ci=clone.querySelectorAll("input,select,textarea");
+  ci.forEach((el,i)=>{const v=oi[i]?oi[i].value:(el.value||"");
+    const s=document.createElement("span");s.textContent=v;s.setAttribute("class",el.getAttribute("class")||"");
+    s.setAttribute("style","display:block;white-space:pre-wrap;word-break:break-word;min-height:18px");el.replaceWith(s);});
+  clone.querySelectorAll("*").forEach(el=>{if(/overflow/.test(el.getAttribute("style")||""))el.style.overflow="visible";});
+  return clone;
+}
+async function nodeToCanvas(node,tw){
+  const clone=cloneForCapture(node);
+  const wrap=document.createElement("div");
+  wrap.style.cssText="position:absolute;left:-99999px;top:0;background:#fff;padding:8px;width:"+tw+"px";
+  wrap.appendChild(clone);document.body.appendChild(wrap);
+  const w=Math.ceil(wrap.getBoundingClientRect().width),h=Math.ceil(wrap.scrollHeight);
+  wrap.style.cssText="background:#fff;padding:8px;width:"+tw+"px"; // 오프스크린 스타일 제거(직렬화용)
+  const xhtml=new XMLSerializer().serializeToString(wrap);document.body.removeChild(wrap);
+  const styleText=[...document.querySelectorAll("style")].map(s=>s.textContent).join("\n");
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">`+
+    `<foreignObject width="100%" height="100%">`+
+    `<div xmlns="http://www.w3.org/1999/xhtml" style="width:${w}px;background:#fff">`+
+    `<style><![CDATA[${styleText}]]></style>${xhtml}</div></foreignObject></svg>`;
+  const img=new Image();img.src="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(svg);
+  await img.decode();
+  const sc=2,cv=document.createElement("canvas");cv.width=w*sc;cv.height=h*sc;
+  const ctx=cv.getContext("2d");ctx.scale(sc,sc);ctx.fillStyle="#fff";ctx.fillRect(0,0,w,h);ctx.drawImage(img,0,0);
+  return cv;
+}
+async function captureNodes(nodes,filename){
+  // 대상 폭 = 표(스크롤 포함) 실제 너비 기준으로 고정
+  let tw=0;
+  nodes.forEach(n=>{n.querySelectorAll("table").forEach(t=>tw=Math.max(tw,Math.ceil(t.scrollWidth)));
+    tw=Math.max(tw,Math.ceil(n.getBoundingClientRect().width));});
+  tw=Math.min(Math.max(tw,320),4000);
+  let canvases;
+  try{canvases=[];for(const n of nodes)canvases.push(await nodeToCanvas(n,tw));}
+  catch(e){alert("이미지 생성 실패: "+e.message);return;}
+  // 개별 캔버스를 세로로 이어붙임 (큰 높이 SVG 래스터화 실패 회피)
+  const gap=24,W=Math.max(...canvases.map(c=>c.width));
+  const H=canvases.reduce((s,c)=>s+c.height,0)+gap*(canvases.length-1);
+  const out=document.createElement("canvas");out.width=W;out.height=H;
+  const ctx=out.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,W,H);
+  let y=0;for(const c of canvases){ctx.drawImage(c,0,y);y+=c.height+gap;}
+  out.toBlob(blob=>{if(!blob){alert("이미지 저장 실패(브라우저 제한). CSV/PDF를 이용하세요.");return;}
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();},"image/png");
+}
+$("#g-capture").onclick=()=>{
+  const D=$("#g-date").value||isoToday();
+  const nodes=[$("#g-report")];
+  if(!settings.ovCollapsed)nodes.push($("#g-overseas"));
+  nodes.push($("#g-forecast"));
+  captureNodes(nodes,"자금수지_갑지_"+D+".png");
+};
+function renderGapji(){renderReports();renderYtdPanel();}
+$("#g-print").onclick=()=>window.print();
+function forecastRows(D){
+  const f=forecastCalc(D,10),rows=[["향후 10영업일 자금 전망 (기준일 "+D+")","","","","",""]];
+  rows.push(["일자","요일","입금(계획)","지출(계획)","순증감","예상 시재","주요 내역"]);
+  rows.push(["기준 시재","","","","",f.startBal,""]);
+  f.rows.forEach(r=>rows.push([r.iso,r.dow,r.i,r.o,r.net,r.bal,r.note]));
+  rows.push(["합계","",f.ti,f.to,f.ti-f.to,f.rows.length?f.rows[f.rows.length-1].bal:f.startBal,""]);
+  return rows;
+}
+function gapjiRows(D,region){
+  region=region||"국내";const g=gapjiCalc(region,D),ov=region==="해외",rows=[];
+  rows.push([(ov?"해외 ":"")+"자금수지 현황"+(ov?"(USD)":""),D,"","","","","",""]);
+  rows.push(["구분","'"+D.slice(2,4)+"년 실적","전일 계획","전일 실적","계획比(실적-계획)","차이","금일 계획","내용"]);
+  const push=(blk)=>blk.forEach(r=>rows.push([r.label,r.ytd,r.pPlan,r.pReal,
+    r.pReal-r.pPlan,r.diff,r.tPlan,r.note]));
+  const tot=(label,t)=>rows.push([label,t.ytd,t.pPlan,t.pReal,
+    t.pReal-t.pPlan,"",t.tPlan,""]);
+  rows.push(["[입금]","","","","","","",""]);push(g.입금);tot("입금 계",gTot(g.입금));
+  rows.push(["[지출]","","","","","","",""]);push(g.지출);tot("지출 계",gTot(g.지출));
+  const inT=gTot(g.입금),outT=gTot(g.지출);
+  const naeY=(Number(settings.naeBase)||0)+(inT.ytd-outT.ytd);
+  if(!ov)rows.push(["국내 시재(사내예금/사내차입금)",naeY,"","","","",naeY+(inT.tPlan-outT.tPlan),""]);
+  const pv=ov?ovBalanceAsOf(g.prev,"actual"):naeY;
+  rows.push(["","","","","","","",""]);
+  rows.push([ov?"전일 해외시재":"전일 시재(실적)",pv,"","","","","",""]);
+  rows.push([ov?"금일 예상 해외시재":"금일 예상 시재",pv+inT.tPlan-outT.tPlan,"","","","","",""]);
+  return rows;
+}
+$("#g-xlsx").onclick=()=>{
+  const D=$("#g-date").value||isoToday();
+  const blob=buildXlsx([
+    {name:"국내갑지 "+D.slice(5),rows:gapjiRows(D,"국내")},
+    {name:"해외갑지 "+D.slice(5),rows:gapjiRows(D,"해외")},
+    {name:"10영업일 전망",rows:forecastRows(D)}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_갑지_"+D+".xlsx";a.click();
+};
+
+/* ---------- 일별 현황판 ---------- */
+function naeBaseSum(){
+  const bi=GAPJI.입금.reduce((s,l)=>s+(Number(settings.ytdBase.국내[l.label])||0),0);
+  const bo=GAPJI.지출.reduce((s,l)=>s+(Number(settings.ytdBase.국내[l.label])||0),0);
+  return (Number(settings.naeBase)||0)+bi-bo;
+}
+function naeBalanceOn(date,mode){ // 국내 시재 누적 (기초 + ybd 이후 수지차)
+  const ybd=settings.ytdBaseDate,today=isoToday();let b=naeBaseSum();mode=mode||"mixed";
+  for(const e of DOM()){if(e.date>ybd&&e.date<=date&&includeEntry(e,mode,today))b+=signed(e);}
+  return b;
+}
+function makeDates(startISO,n){
+  const W=["일","월","화","수","목","금","토"],out=[];let d=new Date((startISO||isoToday())+"T12:00:00");
+  for(let k=0;k<(n||14);k++){const wd=d.getDay();out.push({iso:fmtDate(d),wd,we:wd===0||wd===6,dow:W[wd]});d.setDate(d.getDate()+1);}
+  return out;
+}
+function dailyDates(){return makeDates($("#daily-start").value,+$("#daily-days").value);}
+function dailyCell(data,cats,type,iso,today,mode){
+  return data.filter(e=>e.type===type&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,mode||"mixed",today)).reduce((s,e)=>s+e.amount,0);
+}
+function renderDaily(){
+  const region=$("#daily-region").value,ov=region==="해외",mode=$("#daily-mode").value||"mixed";
+  const defs=ov?GAPJI_OV:GAPJI,data=ov?OV():DOM(),today=isoToday(),dates=dailyDates();
+  const numCell=(v,we)=>`<td class="${we?'we ':''}${v?'':'z'}">${v?fmt(v):"-"}</td>`;
+  const head=`<thead><tr><th class="lbl">구분 <span style="font-weight:400">(${ov?'백만USD':esc(settings.unit)})</span></th>`+
+    dates.map(x=>`<th class="${x.we?'we':''}">${x.dow}</th>`).join("")+`</tr>`+
+    `<tr><th class="lbl">날짜</th>`+dates.map(x=>`<th class="${x.we?'we':''}">${x.iso.slice(5)}</th>`).join("")+`</tr></thead>`;
+  const grp=label=>`<tr class="grp"><td class="lbl">${label}</td>`+dates.map(x=>`<td class="${x.we?'we':''}"></td>`).join("")+`</tr>`;
+  const balRow=`<tr class="bal"><td class="lbl">자금수지(${ov?'해외시재':'국내시재'})</td>`+
+    dates.map(x=>`<td class="${x.we?'we':''}">${fmt(ov?ovBalanceAsOf(x.iso,mode):naeBalanceOn(x.iso,mode))}</td>`).join("")+`</tr>`;
+  const lineRows=(blk,type)=>blk.map((l,li)=>`<tr><td class="lbl">${esc(l.label)}</td>`+
+    dates.map(x=>{const v=dailyCell(data,l.cats,type,x.iso,today,mode);
+      return `<td class="cellc ${x.we?'we ':''}${v?'':'z'}" data-t="${type}" data-li="${li}" data-iso="${x.iso}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`).join("");
+  const totRow=(label,blk,type)=>`<tr class="tot"><td class="lbl">${label}</td>`+
+    dates.map(x=>numCell(blk.reduce((s,l)=>s+dailyCell(data,l.cats,type,x.iso,today,mode),0),x.we)).join("")+`</tr>`;
+  const body=`<tbody>${balRow}${grp("입금"+(ov?" (USD)":""))}${lineRows(defs.입금,"수금")}${totRow("입금 계",defs.입금,"수금")}`+
+    `${grp("지출"+(ov?" (USD)":""))}${lineRows(defs.지출,"지출")}${totRow("지출 계",defs.지출,"지출")}</tbody>`;
+  $("#daily-board").innerHTML=`<table class="daily">${head}${body}</table>`;
+}
+function dailyRows(){
+  const region=$("#daily-region").value,ov=region==="해외",mode=$("#daily-mode").value||"mixed";
+  const defs=ov?GAPJI_OV:GAPJI,data=ov?OV():DOM(),today=isoToday(),dates=dailyDates(),rows=[];
+  rows.push(["요일",...dates.map(x=>x.dow)]);
+  rows.push(["날짜",...dates.map(x=>x.iso)]);
+  rows.push([`자금수지(${ov?'해외시재':'국내시재'})`,...dates.map(x=>ov?ovBalanceAsOf(x.iso,mode):naeBalanceOn(x.iso,mode))]);
+  rows.push(["[입금]"+(ov?"(USD)":"")]);
+  defs.입금.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"수금",x.iso,today,mode))]));
+  rows.push(["입금 계",...dates.map(x=>defs.입금.reduce((s,l)=>s+dailyCell(data,l.cats,"수금",x.iso,today,mode),0))]);
+  rows.push(["[지출]"+(ov?"(USD)":"")]);
+  defs.지출.forEach(l=>rows.push([l.label,...dates.map(x=>dailyCell(data,l.cats,"지출",x.iso,today,mode))]));
+  rows.push(["지출 계",...dates.map(x=>defs.지출.reduce((s,l)=>s+dailyCell(data,l.cats,"지출",x.iso,today,mode),0))]);
+  return rows;
+}
+function dailyShift(delta){
+  const n=+$("#daily-days").value||14,d=new Date(($("#daily-start").value||isoToday())+"T12:00:00");
+  d.setDate(d.getDate()+delta*n);$("#daily-start").value=fmtDate(d);renderDaily();
+}
+$("#daily-prev").onclick=()=>dailyShift(-1);
+$("#daily-next").onclick=()=>dailyShift(1);
+$("#daily-region").onchange=renderDaily;$("#daily-days").onchange=renderDaily;$("#daily-start").onchange=renderDaily;$("#daily-mode").onchange=renderDaily;
+$("#daily-xlsx").onclick=()=>{
+  const blob=buildXlsx([{name:"일별현황판",rows:dailyRows()}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_일별현황_"+($("#daily-start").value||isoToday())+".xlsx";a.click();
+};
+function rawRows(){
+  const seen=new Set(),rows=[["일자","국내외","구분","상세구분","PJT","전망/실적","금액","회입환율(원/USD)","해외 환산(억원)","메모"]];
+  let dup=0;
+  [...entries].sort((a,b)=>a.date.localeCompare(b.date)||(a.region||"").localeCompare(b.region||"")||
+      a.type.localeCompare(b.type)||String(a.category).localeCompare(String(b.category))||String(a.id).localeCompare(String(b.id)))
+    .forEach(e=>{
+      const sig=[e.date,e.region,e.type,e.category,e.project,e.plan,e.amount,e.memo,e.fx||""].join("§");
+      if(seen.has(sig)){dup++;return;}seen.add(sig);
+      const conv=(e.region==="해외"&&e.category===REPAT)?usdToUk(e.amount,e.fx):"";
+      rows.push([e.date,e.region||"국내",e.type,e.category,e.project||"",e.plan,e.amount,e.fx||"",conv,e.memo||""]);
+    });
+  return {rows,dup,count:rows.length-1};
+}
+$("#daily-raw").onclick=()=>{
+  if(!entries.length){alert("내역이 없습니다.");return;}
+  const {rows,dup,count}=rawRows();
+  const blob=buildXlsx([{name:"Raw 데이터",rows}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_Raw_"+isoToday()+".xlsx";a.click();
+  if(dup)setTimeout(()=>alert(`${count}건 저장(중복 ${dup}건 제외).`),100);
+};
+{const d=new Date();d.setDate(d.getDate()-2);$("#daily-start").value=fmtDate(d);}
+
+/* ----- 셀 상세 내역 모달 (조회·수정·전망→실적) ----- */
+let cellCtx=null;
+function openCell(ctx){cellCtx=ctx;$("#cell-modal").hidden=false;renderCellModal();}
+function syncEntryViews(){renderDaily();renderPjtSugum();}
+$("#daily-board").onclick=ev=>{
+  const td=ev.target.closest(".cellc");if(!td)return;
+  const region=$("#daily-region").value,ov=region==="해외",defs=ov?GAPJI_OV:GAPJI;
+  const type=td.dataset.t,blk=type==="수금"?defs.입금:defs.지출,line=blk[+td.dataset.li];
+  if(!line)return;
+  openCell({region,label:line.label,cats:line.cats,type,iso:td.dataset.iso});
+};
+$("#cell-modal").onclick=ev=>{if(ev.target.id==="cell-modal")closeCellModal();};
+function closeCellModal(){$("#cell-modal").hidden=true;cellCtx=null;}
+function cellEntries(){const c=cellCtx;
+  return entries.filter(e=>e.region===c.region&&e.type===c.type&&c.cats.includes(e.category)
+    &&(c.iso?e.date===c.iso:true)
+    &&(c.project?(e.project||"(미지정)")===c.project:true)
+    &&(c.ym?e.date.slice(0,7)===c.ym:true))
+    .sort((a,b)=>a.date.localeCompare(b.date)||b.plan.localeCompare(a.plan)||String(a.id).localeCompare(String(b.id)));}
+function renderCellModal(){
+  const c=cellCtx,ov=c.region==="해외",unit=ov?"백만USD":settings.unit;
+  const multiCat=c.cats.length>1,pjtOn=(!ov&&c.type==="수금"&&PJT_CATS.includes(c.cats[0]));
+  const fxOn=(c.region==="해외"&&c.type==="지출"&&c.cats.includes(REPAT));
+  const multiDate=!c.iso;
+  const es=cellEntries();
+  const row=e=>{
+    const dateCell=multiDate?`<td><input class="ce" type="date" data-f="date" data-id="${e.id}" value="${e.date}" style="width:132px"></td>`:"";
+    const catCell=multiCat?`<select class="ce" data-f="category" data-id="${e.id}">${c.cats.map(x=>`<option${x===e.category?" selected":""}>${esc(x)}</option>`).join("")}</select>`:`<span class="mut">${esc(e.category)}</span>`;
+    const pjtCell=(pjtOn&&!c.project)?`<td><select class="ce" data-f="project" data-id="${e.id}">${(settings.projects||[]).map(x=>`<option${x===e.project?" selected":""}>${esc(x)}</option>`).join("")}${!settings.projects.includes(e.project)&&e.project?`<option selected>${esc(e.project)}</option>`:""}<option value="__new__">＋ 새 PJT 등록…</option></select></td>`:"";
+    const fxCell=fxOn?`<td><input class="ce num" data-f="fx" data-id="${e.id}" value="${e.fx?fmt(e.fx):fmt(settings.fx)}" style="width:66px" title="회입시점 환율(원/USD) → 국내 환산 ${fmt(usdToUk(e.amount,e.fx))}억"></td>`:"";
+    return `<tr>${dateCell}
+      <td><select class="ce" data-f="plan" data-id="${e.id}"><option${e.plan==="전망"?" selected":""}>전망</option><option${e.plan==="실적"?" selected":""}>실적</option></select></td>
+      <td>${catCell}</td>${pjtCell}
+      <td><input class="ce num" data-f="amount" data-id="${e.id}" value="${fmt(e.amount)}" style="width:88px"></td>${fxCell}
+      <td><input class="ce" data-f="memo" data-id="${e.id}" value="${esc(e.memo)}" style="width:150px"></td>
+      <td style="white-space:nowrap">${e.plan==="전망"?`<button class="btn sm" data-toreal="${e.id}" style="background:#1a7f5a;color:#fff" title="전망은 그대로 두고 실적을 복사 생성">실적복사</button> <button class="btn sm" data-conv="${e.id}" style="background:#2f6fb0;color:#fff" title="이 전망을 실적으로 전환(전망 삭제)">실적전환</button> `:""}<button class="btn danger sm" data-cdel="${e.id}">삭제</button></td></tr>`;
+  };
+  const title=c.iso?`${c.iso} · ${esc(c.label)}`:`${esc(c.project||"")} · ${esc(c.label)} · ${c.ym||"전체기간"}`;
+  $("#cell-modal .modal").innerHTML=`
+    <div class="flex" style="margin-bottom:10px">
+      <strong style="font-size:14px">${title} · <span class="${c.type==="수금"?"in":"out"}">${c.type}</span>${ov?" (USD)":""}</strong>
+      <button class="btn sec sm right" id="cell-close">닫기</button>
+    </div>
+    <table class="ce-tbl"><thead><tr>${multiDate?"<th>일자</th>":""}<th>구분</th><th>상세</th>${pjtOn&&!c.project?"<th>PJT</th>":""}<th>금액(${esc(unit)})</th>${fxOn?"<th>환율(원/$)</th>":""}<th>메모</th><th></th></tr></thead>
+    <tbody>${es.length?es.map(row).join(""):`<tr><td colspan="9" class="empty">내역이 없습니다. 아래에서 추가하세요.</td></tr>`}</tbody></table>
+    <div style="margin-top:10px;display:flex;gap:8px">
+      <button class="btn sm" id="cell-add-plan">＋ 전망 추가</button>
+      <button class="btn sm" id="cell-add-real" style="background:#1a7f5a;color:#fff">＋ 실적 추가</button>
+    </div>
+    <p class="note">‘실적복사’=전망 유지 + 실적 생성(계획·실적 비교용) · ‘실적전환’=전망을 실적으로 바꿈(전망 삭제). 실제 금액만 고치면 됩니다.${c.label.includes("연결법인")?" 해외 시재 회수 환산분은 해외 현황판에서 관리하세요.":""}</p>`;
+  $("#cell-close").onclick=closeCellModal;
+  const addEntry=plan=>{const ne={id:uid(),date:c.iso||(c.ym?c.ym+"-01":isoToday()),region:c.region,type:c.type,category:c.cats[0],
+    project:(c.project&&c.project!=="(미지정)")?c.project:(pjtOn?(settings.projects[0]||""):""),plan,amount:0,memo:""};
+    if(fxOn)ne.fx=Number(settings.fx);entries.push(ne);
+    save();renderCellModal();syncEntryViews();};
+  $("#cell-add-plan").onclick=()=>addEntry("전망");
+  $("#cell-add-real").onclick=()=>addEntry("실적");
+  $$("#cell-modal [data-toreal]").forEach(b=>b.onclick=()=>{
+    const e=entries.find(x=>x.id===b.dataset.toreal);if(!e)return;
+    const ne={id:uid(),date:e.date,region:e.region,type:e.type,category:e.category,
+      project:e.project,plan:"실적",amount:e.amount,memo:e.memo};
+    if(e.fx)ne.fx=e.fx;entries.push(ne);
+    save();renderCellModal();syncEntryViews();});
+  $$("#cell-modal [data-conv]").forEach(b=>b.onclick=()=>{
+    const e=entries.find(x=>x.id===b.dataset.conv);if(!e)return;
+    if(!confirm(`이 전망(${fmt(e.amount)})을 실적으로 전환할까요?\n전망 내역은 사라집니다.`))return;
+    e.plan="실적";save();renderCellModal();syncEntryViews();});
+  $$("#cell-modal [data-cdel]").forEach(b=>b.onclick=()=>{
+    entries=entries.filter(x=>x.id!==b.dataset.cdel);save();renderCellModal();syncEntryViews();refreshPjtList();});
+  $$("#cell-modal .ce").forEach(el=>el.onchange=()=>{
+    const e=entries.find(x=>x.id===el.dataset.id);if(!e)return;
+    const f=el.dataset.f;
+    if(f==="amount")e.amount=parseNum(el.value);
+    else if(f==="fx")e.fx=parseNum(el.value);
+    else if(f==="project"){
+      if(el.value==="__new__"){
+        const name=(prompt("새 PJT 이름을 입력하세요 (예: 강동1)")||"").trim();
+        if(name){if(!settings.projects.includes(name)){settings.projects.push(name);
+          settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));renderPjtManage();}e.project=name;}
+      }else e.project=el.value;
+      save();syncEntryViews();fillPjtSelect();setTimeout(renderCellModal,0);return;
+    }
+    else e[f]=el.value;
+    save();syncEntryViews();refreshPjtList();
+    if(f==="plan"||f==="date")setTimeout(renderCellModal,0);
+  });
+}
+
+/* ---------- trend ---------- */
+$("#trend-month").value=isoToday().slice(0,7);
+$("#trend-month").onchange=renderTrend;$("#trend-mode").onchange=renderTrend;
+function daysInMonth(ym){const[y,m]=ym.split("-").map(Number);return new Date(y,m,0).getDate();}
+function renderTrend(){
+  const ym=$("#trend-month").value||isoToday().slice(0,7),mode=$("#trend-mode").value,today=isoToday();
+  const nd=daysInMonth(ym);const rows=[];let monIn=0,monOut=0;const dom=DOM();
+  for(let d=1;d<=nd;d++){
+    const date=`${ym}-${String(d).padStart(2,"0")}`;
+    const de=dom.filter(e=>e.date===date&&includeEntry(e,mode,today));
+    const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+    const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+    monIn+=i;monOut+=o;
+    rows.push({date,d,i,o,net:i-o,bal:balanceAsOf(date,mode)});
+  }
+  const first=balanceAsOf(prevDay(ym+"-01"),mode);
+  const last=rows[rows.length-1].bal;
+  $("#trend-kpis").innerHTML=[
+    ["월초 시재",first,""],["월 수금",monIn,"in"],["월 지출",monOut,"out"],["월말 시재",last,""]
+  ].map(([l,v,c])=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c}">${fmt(v)}</div></div>`).join("");
+  // table (only days with activity)
+  const act=rows.filter(r=>r.i||r.o);
+  $("#trend-tbl").innerHTML=
+    `<thead><tr><th class="lft">일자</th><th>수금</th><th>지출</th><th>순증감</th><th>누적 시재</th></tr></thead><tbody>`+
+    (act.length?act.map(r=>`<tr><td class="lft">${r.date.slice(5)}</td>
+      <td class="num in">${r.i?fmt(r.i):"-"}</td><td class="num out">${r.o?fmt(r.o):"-"}</td>
+      <td class="num ${r.net>=0?'in':'out'}">${fmt(r.net)}</td>
+      <td class="num">${fmt(r.bal)}</td></tr>`).join("")
+     :`<tr><td colspan="5" class="empty">이 달 내역이 없습니다</td></tr>`)+`</tbody>`;
+  drawChart(rows);
+}
+function drawChart(rows){
+  const W=920,H=240,pad={l:64,r:16,t:16,b:24};
+  const xs=rows.map(r=>r.d),ys=rows.map(r=>r.bal);
+  let mn=Math.min(...ys,0),mx=Math.max(...ys,1);if(mn===mx){mx=mn+1;}
+  const px=i=>pad.l+(W-pad.l-pad.r)*(i/(rows.length-1||1));
+  const py=v=>pad.t+(H-pad.t-pad.b)*(1-(v-mn)/(mx-mn));
+  const pts=rows.map((r,i)=>`${px(i).toFixed(1)},${py(r.bal).toFixed(1)}`).join(" ");
+  const area=`${pad.l},${py(mn)} ${pts} ${px(rows.length-1)},${py(mn)}`;
+  const zero=py(0);
+  let grid="";for(let g=0;g<=4;g++){const v=mn+(mx-mn)*g/4,y=py(v);
+    grid+=`<line x1="${pad.l}" y1="${y}" x2="${W-pad.r}" y2="${y}" stroke="#eef1f6"/>
+           <text x="${pad.l-8}" y="${y+4}" text-anchor="end" font-size="10" fill="#98a2b3">${fmt(v)}</text>`;}
+  let xlab="";const step=Math.ceil(rows.length/12);
+  rows.forEach((r,i)=>{if(i%step===0)xlab+=`<text x="${px(i)}" y="${H-6}" text-anchor="middle" font-size="10" fill="#98a2b3">${r.d}</text>`;});
+  $("#trend-chart").innerHTML=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+    ${grid}
+    ${mn<0?`<line x1="${pad.l}" y1="${zero}" x2="${W-pad.r}" y2="${zero}" stroke="#c0392b" stroke-dasharray="3 3"/>`:""}
+    <polygon points="${area}" fill="#2f6fb0" opacity="0.08"/>
+    <polyline points="${pts}" fill="none" stroke="#2f6fb0" stroke-width="2"/>
+    ${xlab}</svg>`;
+}
+
+/* ---------- pjt / plan vs actual ---------- */
+$("#pjt-month").value=isoToday().slice(0,7);
+$("#pjt-month").onchange=renderPjt;
+$("#pjt-all").onclick=()=>{$("#pjt-month").value="";renderPjt();};
+function renderPjt(){
+  const ym=$("#pjt-month").value;
+  const scope=entries.filter(e=>e.region!=="해외"&&(!ym||e.date.slice(0,7)===ym));
+  // PJT table (수금 only)
+  const ins=scope.filter(e=>e.type==="수금");
+  const pjts=[...new Set(ins.map(e=>e.project||"(미지정)"))];
+  const prow=pjts.map(p=>{
+    const es=ins.filter(e=>(e.project||"(미지정)")===p);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {p,plan,real};
+  }).sort((a,b)=>(b.plan+b.real)-(a.plan+a.real));
+  $("#pjt-tbl").innerHTML=pjtTableHtml(prow,"PJT");
+  $("#cat-in-tbl").innerHTML=catTableHtml(scope,"수금");
+  $("#cat-out-tbl").innerHTML=catTableHtml(scope,"지출");
+}
+/* ---------- PJT 수금실적 (일별) ---------- */
+{const d=new Date();d.setDate(d.getDate()-2);$("#ps-start").value=fmtDate(d);}
+$("#ps-basis").onchange=renderPjtSugum;$("#ps-start").onchange=renderPjtSugum;$("#ps-days").onchange=renderPjtSugum;
+$("#ps-prev").onclick=()=>psShift(-1);$("#ps-next").onclick=()=>psShift(1);
+function psShift(dir){const n=+$("#ps-days").value||14,x=new Date(($("#ps-start").value||isoToday())+"T12:00:00");
+  x.setDate(x.getDate()+dir*n);$("#ps-start").value=fmtDate(x);renderPjtSugum();}
+function psData(){
+  const mode=$("#ps-basis").value||"actual",today=isoToday();
+  const dates=makeDates($("#ps-start").value,+$("#ps-days").value);
+  const scope=entries.filter(e=>e.region!=="해외"&&e.type==="수금"&&PJT_SUGUM.some(g=>g.cats.includes(e.category)));
+  const pjts=[...new Set(scope.map(e=>e.project||"(미지정)"))].sort((a,b)=>a.localeCompare(b,"ko"));
+  const cell=(p,cats,iso)=>scope.filter(e=>(e.project||"(미지정)")===p&&cats.includes(e.category)&&e.date===iso&&includeEntry(e,mode,today)).reduce((s,e)=>s+e.amount,0);
+  return {mode,dates,pjts,cell};
+}
+function renderPjtSugum(){
+  const {dates,pjts,cell}=psData();
+  const head=`<thead><tr><th class="lbl">PJT / 세부구분 <span style="font-weight:400">(${esc(settings.unit)})</span></th>`+
+    dates.map(x=>`<th class="${x.we?'we':''}">${x.dow}</th>`).join("")+`</tr>`+
+    `<tr><th class="lbl">날짜</th>`+dates.map(x=>`<th class="${x.we?'we':''}">${x.iso.slice(5)}</th>`).join("")+`</tr></thead>`;
+  let body="",shown=0;
+  pjts.forEach(p=>{
+    const active=PJT_SUGUM.map((g,gi)=>({g,gi,has:dates.some(x=>cell(p,g.cats,x.iso))})).filter(o=>o.has);
+    if(!active.length)return; // 표시 기간에 값 없는 PJT는 숨김
+    shown++;
+    body+=`<tr class="grp"><td class="lbl">${esc(p)}</td>`+
+      dates.map(x=>{const v=PJT_SUGUM.reduce((s,g)=>s+cell(p,g.cats,x.iso),0);return `<td class="${x.we?'we':''}">${v?fmt(v):""}</td>`;}).join("")+`</tr>`;
+    active.forEach(({g,gi})=>{body+=`<tr><td class="lbl" style="padding-left:22px">${esc(g.label)}</td>`+
+      dates.map(x=>{const v=cell(p,g.cats,x.iso);
+        return `<td class="cellc ${x.we?'we ':''}${v?'':'z'}" data-p="${esc(p)}" data-g="${gi}" data-iso="${x.iso}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`;});
+  });
+  if(!shown)body=`<tr><td class="lbl">-</td><td class="empty" colspan="${dates.length}">표시 기간에 PJT 수금 내역이 없습니다. 일별 현황판/입력에서 추가하세요.</td></tr>`;
+  const totRow=shown?`<tr class="tot"><td class="lbl">전체 합계</td>`+
+    dates.map(x=>{const v=pjts.reduce((s,p)=>s+PJT_SUGUM.reduce((ss,g)=>ss+cell(p,g.cats,x.iso),0),0);return `<td class="${x.we?'we':''}">${v?fmt(v):"-"}</td>`;}).join("")+`</tr>`:"";
+  $("#ps-table").innerHTML=`<table class="daily">${head}<tbody>${body}${totRow}</tbody></table>`;
+  $$("#ps-table .cellc").forEach(td=>td.onclick=()=>{const g=PJT_SUGUM[+td.dataset.g];
+    openCell({region:"국내",label:g.label,cats:g.cats,type:"수금",iso:td.dataset.iso,project:td.dataset.p});});
+}
+$("#ps-xlsx").onclick=()=>{
+  const {dates,pjts,cell}=psData();
+  const out=[["PJT / 세부구분","요일",...dates.map(x=>x.dow)]];
+  out.push(["","날짜",...dates.map(x=>x.iso)]);
+  pjts.forEach(p=>{
+    const active=PJT_SUGUM.filter(g=>dates.some(x=>cell(p,g.cats,x.iso)));
+    if(!active.length)return;
+    out.push([p,"소계",...dates.map(x=>PJT_SUGUM.reduce((s,g)=>s+cell(p,g.cats,x.iso),0))]);
+    active.forEach(g=>out.push(["",g.label,...dates.map(x=>cell(p,g.cats,x.iso))]));
+  });
+  out.push(["전체 합계","",...dates.map(x=>pjts.reduce((s,p)=>s+PJT_SUGUM.reduce((ss,g)=>ss+cell(p,g.cats,x.iso),0),0))]);
+  const blob=buildXlsx([{name:"PJT 수금실적",rows:out}]);
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_PJT수금실적_"+($("#ps-start").value||isoToday())+".xlsx";a.click();
+};
+function achv(plan,real){if(!plan)return real?'<span class="pill real">신규</span>':"-";
+  const r=Math.round(real/plan*100);return `<span class="num ${r>=100?'in':r>=70?'':'out'}">${r}%</span>`;}
+function pjtTableHtml(rows,head){
+  const tp=rows.reduce((s,r)=>s+r.plan,0),tr=rows.reduce((s,r)=>s+r.real,0);
+  if(!rows.length)return `<thead><tr><th class="lft">${head}</th><th>전망</th><th>실적</th><th>달성</th></tr></thead><tbody><tr><td colspan="4" class="empty">내역 없음</td></tr></tbody>`;
+  return `<thead><tr><th class="lft">${head}</th><th>전망</th><th>실적</th><th>달성</th></tr></thead><tbody>`+
+    rows.map(r=>`<tr><td class="lft">${esc(r.p)}</td><td class="num mut">${fmt(r.plan)}</td>
+      <td class="num in">${fmt(r.real)}</td><td>${achv(r.plan,r.real)}</td></tr>`).join("")+
+    `<tr class="row-tot"><td class="lft">합계</td><td class="num">${fmt(tp)}</td><td class="num">${fmt(tr)}</td><td>${achv(tp,tr)}</td></tr></tbody>`;
+}
+function catTableHtml(scope,type){
+  const cls=type==="수금"?"in":"out";
+  const rows=CATS[type].map(cat=>{
+    const es=scope.filter(e=>e.type===type&&e.category===cat);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {cat,plan,real};
+  }).filter(r=>r.plan||r.real);
+  const tp=rows.reduce((s,r)=>s+r.plan,0),tr=rows.reduce((s,r)=>s+r.real,0);
+  let h=`<thead><tr><th class="lft">${type} 상세구분</th><th>전망</th><th>실적</th><th>달성</th></tr></thead><tbody>`;
+  h+=rows.length?rows.map(r=>`<tr><td class="lft">${esc(r.cat)}</td><td class="num mut">${fmt(r.plan)}</td>
+      <td class="num ${cls}">${fmt(r.real)}</td><td>${achv(r.plan,r.real)}</td></tr>`).join("")
+    :`<tr><td colspan="4" class="empty">내역 없음</td></tr>`;
+  h+=`<tr class="row-tot"><td class="lft">합계</td><td class="num">${fmt(tp)}</td><td class="num ${cls}">${fmt(tr)}</td><td>${achv(tp,tr)}</td></tr></tbody>`;
+  return h;
+}
+
+/* ---------- PJT 관리 ---------- */
+function renderPjtManage(){
+  const box=$("#pjt-manage");if(!box)return;
+  const ps=settings.projects||[];
+  if(!ps.length){box.innerHTML='<p class="empty">등록된 PJT가 없습니다. 입력 화면에서 ‘＋ 새 PJT 등록’으로 추가하세요.</p>';return;}
+  box.innerHTML=ps.map((p,i)=>{
+    const n=entries.filter(e=>e.project===p).length;
+    return `<div class="flex" style="margin-bottom:6px">
+      <input class="pjt-ren" data-i="${i}" value="${esc(p)}" style="width:220px">
+      <span class="sub">${n}건</span>
+      <button class="btn sec sm pjt-save" data-i="${i}">이름변경</button>
+      <button class="btn danger sm pjt-del" data-i="${i}">삭제</button></div>`;
+  }).join("")+`<p class="note">이름변경 시 그 PJT로 입력된 모든 내역이 함께 바뀝니다(같은 이름이 있으면 합쳐집니다). 삭제는 목록에서만 제거하며 기존 내역 값은 유지됩니다.</p>`;
+  $$("#pjt-manage .pjt-save").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.i,old=settings.projects[i],nw=$$("#pjt-manage .pjt-ren")[i].value.trim();
+    if(!nw||nw===old)return;
+    entries.forEach(e=>{if(e.project===old)e.project=nw;});
+    settings.projects=[...new Set(settings.projects.map((x,j)=>j===i?nw:x))].sort((a,b)=>a.localeCompare(b,"ko"));
+    save();fillPjtSelect();renderRecent();renderPjtManage();
+  });
+  $$("#pjt-manage .pjt-del").forEach(b=>b.onclick=()=>{
+    const i=+b.dataset.i,p=settings.projects[i],n=entries.filter(e=>e.project===p).length;
+    if(!confirm(`‘${p}’를 목록에서 삭제할까요?${n?` (기존 ${n}건의 값은 유지됩니다)`:""}`))return;
+    settings.projects.splice(i,1);save();fillPjtSelect();renderPjtManage();
+  });
+}
+
+/* ---------- settings / backup ---------- */
+function fillSettings(){
+  $("#s-basedate").value=settings.baseDate;$("#s-basebal").value=fmt(settings.baseBalance);
+  $("#s-unit").value=settings.unit;
+  $("#s-fx").value=fmt(settings.fx);$("#s-ovbal").value=fmt(settings.ovBaseBalance);
+  $("#unit-lbl2").textContent="("+settings.unit+")";
+}
+$("#s-save").onclick=()=>{
+  settings.baseDate=$("#s-basedate").value||isoToday();
+  settings.baseBalance=parseNum($("#s-basebal").value);
+  settings.unit=$("#s-unit").value;
+  settings.fx=parseNum($("#s-fx").value)||1350;
+  settings.ovBaseBalance=parseNum($("#s-ovbal").value);
+  save();fillSettings();
+  alert("저장했습니다.");
+};
+$("#s-export").onclick=()=>{
+  const head=["일자","국내외","구분","상세구분","PJT","전망실적","금액","메모","회입환율"];
+  const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
+  const csv=[head.join(",")].concat(entries.map(e=>
+    [e.date,e.region||"국내",e.type,e.category,e.project,e.plan,e.amount,e.memo,e.fx||""].map(q).join(","))).join("\r\n");
+  const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_"+isoToday()+".csv";a.click();
+};
+/* ----- full backup: data file save / restore (.json) ----- */
+$("#s-backup").onclick=()=>{
+  const snap={app:"자금수지 모판",version:2,exportedAt:new Date().toISOString(),
+    settings,entries,manual};
+  const blob=new Blob([JSON.stringify(snap,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_데이터_"+isoToday()+".json";a.click();
+};
+$("#s-restore").onchange=e=>{
+  const f=e.target.files[0];if(!f){return;}
+  const r=new FileReader();
+  r.onload=()=>{
+    let snap;
+    try{snap=JSON.parse(r.result);}catch(err){alert("올바른 데이터 파일이 아닙니다. (JSON 형식 오류)");return;}
+    if(!snap||!Array.isArray(snap.entries)){alert("이 파일에는 자금수지 데이터가 없습니다.");return;}
+    const cnt=snap.entries.length;
+    if(entries.length && !confirm(`현재 데이터(${entries.length}건)를 지우고 파일의 데이터(${cnt}건)로 교체할까요?`)){return;}
+    // sanitize entries
+    entries=snap.entries.filter(x=>x&&x.date).map(x=>({
+      id:x.id||uid(),date:String(x.date),region:x.region==="해외"?"해외":"국내",
+      type:x.type==="지출"?"지출":"수금",
+      category:String(x.category||"기타"),project:String(x.project||""),
+      plan:x.plan==="실적"?"실적":"전망",amount:Number(x.amount)||0,memo:String(x.memo||""),
+      ...(x.fx?{fx:Number(x.fx)}:{})}));
+    if(snap.settings&&typeof snap.settings==="object"){
+      const s=snap.settings;
+      settings={baseDate:s.baseDate||isoToday(),baseBalance:Number(s.baseBalance)||0,
+        unit:s.unit||"억원",fx:Number(s.fx)||1350,ovBaseBalance:Number(s.ovBaseBalance)||0,
+        unitFixed:true,naeBase:Number(s.naeBase)||0,ytdBaseDate:s.ytdBaseDate||"2026-07-01",
+        projects:Array.isArray(s.projects)?s.projects.slice():[],
+        gapjiW:(s.gapjiW&&typeof s.gapjiW==="object")?s.gapjiW:{},ovCollapsed:s.ovCollapsed!==false,
+        fcNotes:(s.fcNotes&&typeof s.fcNotes==="object")?s.fcNotes:{},
+        fcW:(s.fcW&&typeof s.fcW==="object")?s.fcW:{},fcNoteCount:Number(s.fcNoteCount)||2,
+        ytdBase:(s.ytdBase&&typeof s.ytdBase==="object")?{국내:s.ytdBase.국내||{},해외:s.ytdBase.해외||{}}:{국내:{},해외:{}}};
+    }
+    manual=(snap.manual&&typeof snap.manual==="object")?snap.manual:{};
+    save();saveM();refreshPjtList();renderRecent();fillSettings();renderYtdPanel();renderPjtManage();
+    alert(`복원 완료: ${entries.length}건을 불러왔습니다.`);
+  };
+  r.readAsText(f);e.target.value="";
+};
+
+/* ----- xlsx (self-contained, no libraries) ----- */
+function crc32(buf){let crc=0xFFFFFFFF;
+  for(let i=0;i<buf.length;i++){crc^=buf[i];
+    for(let j=0;j<8;j++)crc=(crc>>>1)^(0xEDB88320&-(crc&1));}
+  return (crc^0xFFFFFFFF)>>>0;}
+function zipStore(files){
+  const chunks=[],central=[];let offset=0;
+  const u16=n=>[n&255,(n>>>8)&255],u32=n=>[n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255];
+  const enc=new TextEncoder();
+  for(const f of files){
+    const nb=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const local=[].concat(u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),
+      u32(crc),u32(sz),u32(sz),u16(nb.length),u16(0));
+    chunks.push(new Uint8Array(local),nb,f.data);
+    central.push({crc,sz,nb,offset});
+    offset+=local.length+nb.length+sz;}
+  const cdStart=offset;let cdSize=0;
+  for(const c of central){
+    const h=[].concat(u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),
+      u32(c.crc),u32(c.sz),u32(c.sz),u16(c.nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(c.offset));
+    chunks.push(new Uint8Array(h),c.nb);cdSize+=h.length+c.nb.length;}
+  chunks.push(new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),
+    u16(central.length),u16(central.length),u32(cdSize),u32(cdStart),u16(0))));
+  return new Blob(chunks,{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});
+}
+function xmlEsc(s){return String(s??"").replace(/[<>&"']/g,c=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&apos;"}[c]));}
+function colRef(n){let s="";n++;while(n>0){const m=(n-1)%26;s=String.fromCharCode(65+m)+s;n=(n-m-1)/26;}return s;}
+function sheetXml(rows){
+  let body="";
+  rows.forEach((row,ri)=>{let cells="";
+    row.forEach((v,ci)=>{const ref=colRef(ci)+(ri+1);
+      if(typeof v==="number"&&isFinite(v))cells+=`<c r="${ref}" s="1"><v>${v}</v></c>`;
+      else cells+=`<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;});
+    body+=`<row r="${ri+1}">${cells}</row>`;});
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${body}</sheetData></worksheet>`;
+}
+function buildXlsx(sheets){
+  const enc=new TextEncoder(),files=[];
+  const ct=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`+
+    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>`+
+    `<Default Extension="xml" ContentType="application/xml"/>`+
+    `<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>`+
+    `<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>`+
+    sheets.map((s,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join("")+`</Types>`;
+  const styles=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`+
+    `<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0;&quot;△&quot;#,##0"/></numFmts>`+
+    `<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>`+
+    `<fills count="1"><fill><patternFill patternType="none"/></fill></fills>`+
+    `<borders count="1"><border/></borders>`+
+    `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`+
+    `<cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`+
+    `<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/></cellXfs>`+
+    `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const rels=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+    `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`;
+  const wb=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`+
+    `<sheets>`+sheets.map((s,i)=>`<sheet name="${xmlEsc(s.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join("")+`</sheets></workbook>`;
+  const wbr=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`+
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">`+
+    sheets.map((s,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join("")+
+    `<Relationship Id="rId${sheets.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+  files.push({name:"[Content_Types].xml",data:enc.encode(ct)});
+  files.push({name:"_rels/.rels",data:enc.encode(rels)});
+  files.push({name:"xl/workbook.xml",data:enc.encode(wb)});
+  files.push({name:"xl/_rels/workbook.xml.rels",data:enc.encode(wbr)});
+  files.push({name:"xl/styles.xml",data:enc.encode(styles)});
+  sheets.forEach((s,i)=>files.push({name:`xl/worksheets/sheet${i+1}.xml`,data:enc.encode(sheetXml(s.rows))}));
+  return zipStore(files);
+}
+function xlsxSheets(){
+  const U="금액("+settings.unit+")";
+  // 1) 내역
+  const sorted=[...entries].sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+  const s1=[["일자","국내외","구분","상세구분","PJT","전망/실적",U+"/USD","메모"]]
+    .concat(sorted.map(e=>[e.date,e.region||"국내",e.type,e.category,e.project,e.plan,e.amount,e.memo]));
+  // 2) 일별 집계 (국내, 혼합 기준)
+  const today=isoToday(),dom=DOM();
+  const dates=[...new Set(dom.map(e=>e.date))].sort();
+  const s2=[["일자","수금","지출","순증감","누적 시재"]];
+  dates.forEach(d=>{
+    const de=dom.filter(e=>e.date===d&&includeEntry(e,"mixed",today));
+    const i=de.filter(e=>e.type==="수금").reduce((s,e)=>s+e.amount,0);
+    const o=de.filter(e=>e.type==="지출").reduce((s,e)=>s+e.amount,0);
+    s2.push([d,i,o,i-o,balanceAsOf(d,"mixed")]);
+  });
+  // 3) PJT별 수금 (국내)
+  const ins=entries.filter(e=>e.region!=="해외"&&e.type==="수금");
+  const pjts=[...new Set(ins.map(e=>e.project||"(미지정)"))];
+  const s3=[["PJT","전망","실적","달성률(%)"]];
+  pjts.map(p=>{
+    const es=ins.filter(e=>(e.project||"(미지정)")===p);
+    const plan=es.filter(e=>e.plan==="전망").reduce((s,e)=>s+e.amount,0);
+    const real=es.filter(e=>e.plan==="실적").reduce((s,e)=>s+e.amount,0);
+    return {p,plan,real};
+  }).sort((a,b)=>(b.plan+b.real)-(a.plan+a.real))
+    .forEach(r=>s3.push([r.p,r.plan,r.real,r.plan?Math.round(r.real/r.plan*100):""]));
+  return [{name:"내역",rows:s1},{name:"일별 집계",rows:s2},{name:"PJT별 수금",rows:s3}];
+}
+$("#s-xlsx").onclick=()=>{
+  if(!entries.length){alert("내보낼 데이터가 없습니다.");return;}
+  const blob=buildXlsx(xlsxSheets());
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="자금수지_"+isoToday()+".xlsx";a.click();
+};
+$("#s-import").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();r.onload=()=>{
+    const added=parseCsv(r.result);entries=entries.concat(added);save();
+    refreshPjtList();renderRecent();alert(added.length+"건을 추가했습니다.");
+  };r.readAsText(f);e.target.value="";
+};
+function parseCsv(text){
+  const rows=[];let i=0,field="",row=[],q=false;
+  text=text.replace(/^﻿/,"");
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){field+='"';i++;}else q=false;}else field+=c;}
+    else{if(c==='"')q=true;else if(c===","){row.push(field);field="";}
+      else if(c==="\n"){row.push(field);rows.push(row);row=[];field="";}
+      else if(c!=="\r")field+=c;}
+    i++;}
+  if(field.length||row.length){row.push(field);rows.push(row);}
+  const out=[],hasR=(rows[0]||[])[1]&&String(rows[0][1]).includes("국내");
+  for(let k=1;k<rows.length;k++){const r=rows[k];if(!r[0])continue;
+    const c=hasR?{reg:r[1],t:r[2],cat:r[3],pjt:r[4],pl:r[5],amt:r[6],memo:r[7],fx:r[8]}
+                :{reg:"국내",t:r[1],cat:r[2],pjt:r[3],pl:r[4],amt:r[5],memo:r[6],fx:r[7]};
+    if(c.t==null)continue;
+    const o={id:uid(),date:r[0].trim(),region:String(c.reg).trim()==="해외"?"해외":"국내",
+      type:String(c.t).trim()==="지출"?"지출":"수금",category:String(c.cat||"").trim(),
+      project:String(c.pjt||"").trim(),plan:String(c.pl).trim()==="실적"?"실적":"전망",
+      amount:parseNum(c.amt),memo:String(c.memo||"").trim()};
+    if(c.fx&&parseNum(c.fx))o.fx=parseNum(c.fx);
+    out.push(o);}
+  return out;
+}
+/* ----- 사업부 엑셀/CSV 가져오기 (열 매핑) ----- */
+function colIdx(ref){let n=0;for(const ch of ref)n=n*26+(ch.charCodeAt(0)-64);return n-1;}
+function xUnesc(s){return String(s).replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&#(\d+);/g,(_,d)=>String.fromCharCode(+d)).replace(/&amp;/g,"&");}
+function excelDate(serial){const ms=Math.round((serial-25569)*86400000);const d=new Date(ms);
+  return d.getUTCFullYear()+"-"+String(d.getUTCMonth()+1).padStart(2,"0")+"-"+String(d.getUTCDate()).padStart(2,"0");}
+async function inflateRaw(u8){
+  const ds=new DecompressionStream("deflate-raw");
+  const ab=await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+async function readXlsxRows(buf){
+  const dv=new DataView(buf),u8=new Uint8Array(buf),dec=new TextDecoder();
+  let eocd=-1;for(let i=u8.length-22;i>=0;i--){if(dv.getUint32(i,true)===0x06054b50){eocd=i;break;}}
+  if(eocd<0)throw new Error("올바른 xlsx가 아닙니다");
+  let p=dv.getUint32(eocd+16,true);const cnt=dv.getUint16(eocd+10,true),files={};
+  for(let n=0;n<cnt;n++){
+    const method=dv.getUint16(p+10,true),compSize=dv.getUint32(p+20,true);
+    const nameLen=dv.getUint16(p+28,true),exLen=dv.getUint16(p+30,true),cmLen=dv.getUint16(p+32,true);
+    const lo=dv.getUint32(p+42,true),name=dec.decode(u8.subarray(p+46,p+46+nameLen));
+    const lNameLen=dv.getUint16(lo+26,true),lExLen=dv.getUint16(lo+28,true);
+    const start=lo+30+lNameLen+lExLen;files[name]={method,data:u8.subarray(start,start+compSize)};
+    p+=46+nameLen+exLen+cmLen;
+  }
+  const get=async n=>{const f=files[n];if(!f)return null;return dec.decode(f.method===0?f.data:await inflateRaw(f.data));};
+  let shared=[];const ss=await get("xl/sharedStrings.xml");
+  if(ss)shared=(ss.match(/<si>[\s\S]*?<\/si>/g)||[]).map(si=>(si.match(/<t[^>]*>([\s\S]*?)<\/t>/g)||[]).map(t=>xUnesc(t.replace(/<[^>]+>/g,""))).join(""));
+  // 첫 시트 (workbook 순서 우선, 없으면 sheet1)
+  let sheetFile="xl/worksheets/sheet1.xml";
+  const wbRels=await get("xl/_rels/workbook.xml.rels"),wb=await get("xl/workbook.xml");
+  if(wb&&wbRels){const first=(wb.match(/<sheet[^>]*r:id="([^"]+)"/)||[])[1];
+    if(first){const tgt=(wbRels.match(new RegExp('Id="'+first+'"[^>]*Target="([^"]+)"'))||[])[1];
+      if(tgt)sheetFile="xl/"+tgt.replace(/^\//,"").replace(/^xl\//,"");}}
+  const sx=await get(sheetFile)||await get("xl/worksheets/sheet1.xml");
+  const rows=[];
+  for(const rm of (sx.match(/<row[^>]*>[\s\S]*?<\/row>/g)||[])){
+    const cells=[];
+    for(const cm of (rm.match(/<c[^>]*?(?:\/>|>[\s\S]*?<\/c>)/g)||[])){
+      const ref=(cm.match(/r="([A-Z]+)\d+"/)||[])[1];if(!ref)continue;
+      const ci=colIdx(ref),t=(cm.match(/ t="([^"]+)"/)||[])[1];
+      let val="";
+      if(t==="s"){const v=(cm.match(/<v>([\s\S]*?)<\/v>/)||[])[1];val=shared[+v]||"";}
+      else if(t==="inlineStr"||t==="str"){const is=(cm.match(/<t[^>]*>([\s\S]*?)<\/t>/)||[[,""]])[1];val=xUnesc(is||"");}
+      else{const v=(cm.match(/<v>([\s\S]*?)<\/v>/)||[])[1];val=v!=null?v:"";}
+      cells[ci]=val;
+    }
+    rows.push(cells);
+  }
+  return rows;
+}
+function csvToRows(text){
+  const rows=[];let i=0,f="",row=[],q=false;text=text.replace(/^﻿/,"");
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else{if(c==='"')q=true;else if(c===","){row.push(f);f="";}
+      else if(c==="\n"){row.push(f);rows.push(row);row=[];f="";}else if(c!=="\r")f+=c;}
+    i++;}
+  if(f.length||row.length){row.push(f);rows.push(row);}
+  return rows;
+}
+let impRows=null;
+$("#imp-file").onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{
+    if(/\.csv$/i.test(f.name))impRows=csvToRows(await f.text());
+    else impRows=await readXlsxRows(await f.arrayBuffer());
+  }catch(err){alert("파일을 읽지 못했습니다: "+err.message+"\n엑셀을 CSV로 저장해 다시 시도해 보세요.");e.target.value="";return;}
+  e.target.value="";
+  impRows=impRows.filter(r=>r&&r.some(c=>String(c).trim()!==""));
+  if(impRows.length<2){alert("데이터가 부족합니다(머리글+1행 이상 필요).");return;}
+  $("#imp-modal").hidden=false;renderImport();
+};
+$("#imp-modal").onclick=ev=>{if(ev.target.id==="imp-modal")$("#imp-modal").hidden=true;};
+const impMap={hdr:0,date:-1,pjt:-1,cat:-1,memo:-1,amtMode:"split",inAmt:-1,outAmt:-1,typeCol:-1,amtCol:-1,
+  plan:"전망",region:"국내",fixDate:"",catIn:"공사수입(기성)",catOut:"현장 대금지급"};
+function impCols(){const h=impRows[impMap.hdr]||[];const w=Math.max(...impRows.map(r=>r.length));
+  const out=[];for(let i=0;i<w;i++)out.push({i,name:(h[i]!=null&&String(h[i]).trim())?String(h[i]).trim():"열"+String.fromCharCode(65+i)});return out;}
+function colSel(field,cur,allowNone){const opts=(allowNone?`<option value="-1">— 없음 —</option>`:"")+
+  impCols().map(c=>`<option value="${c.i}"${c.i===cur?" selected":""}>${esc(c.name)}</option>`).join("");
+  return `<select class="imp" data-k="${field}">${opts}</select>`;}
+function buildImport(){
+  const m=impMap,out=[],newPjts=new Set();
+  for(let r=m.hdr+1;r<impRows.length;r++){
+    const row=impRows[r];if(!row)continue;
+    const cell=i=>i>=0?String(row[i]??"").trim():"";
+    let date=m.date>=0?cell(m.date):m.fixDate;
+    if(m.date>=0&&/^\d+(\.\d+)?$/.test(date)&&Number(date)>20000&&Number(date)<80000)date=excelDate(Number(date));
+    date=String(date).replace(/[./]/g,"-").slice(0,10);
+    if(!/^\d{4}-\d{1,2}-\d{1,2}$/.test(date))date=m.fixDate; // 파싱 실패 시 일괄일자
+    if(!date)continue;
+    date=date.replace(/-(\d)(?=-|$)/g,"-0$1");
+    const pjt=cell(m.pjt),memo=cell(m.memo),catText=cell(m.cat);
+    if(pjt)newPjts.add(pjt);
+    const mk=(type,amt)=>{if(!amt)return;const cat=catText||(type==="수금"?m.catIn:m.catOut);
+      out.push({id:uid(),date,region:m.region,type,category:cat,project:type==="수금"?pjt:"",
+        plan:m.plan,amount:amt,memo});};
+    if(m.amtMode==="split"){mk("수금",parseNum(cell(m.inAmt)));mk("지출",parseNum(cell(m.outAmt)));}
+    else{const t=cell(m.typeCol),amt=parseNum(cell(m.amtCol));
+      mk(/지출|출금|지급/.test(t)?"지출":"수금",amt);}
+  }
+  return {out,newPjts:[...newPjts]};
+}
+function renderImport(){
+  const m=impMap,split=m.amtMode==="split";
+  const catOpts=list=>list.map(c=>`<option>${esc(c)}</option>`).join("");
+  const {out}=buildImport();
+  const prev=out.slice(0,8).map(e=>`<tr><td>${e.date}</td><td>${e.region}</td><td class="${e.type==="수금"?"in":"out"}">${e.type}</td><td>${esc(e.category)}</td><td>${esc(e.project)}</td><td class="num">${fmt(e.amount)}</td></tr>`).join("");
+  $("#imp-modal .modal").innerHTML=`
+    <div class="flex" style="margin-bottom:10px"><strong style="font-size:15px">엑셀 가져오기 — 열 매핑</strong>
+      <button class="btn sec sm right" id="imp-close">닫기</button></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div><label>머리글 행</label><select class="imp" data-k="hdr">${impRows.slice(0,5).map((_,i)=>`<option value="${i}"${i===m.hdr?" selected":""}>${i+1}행</option>`).join("")}</select></div>
+      <div><label>일자 열</label>${colSel("date",m.date,true)}</div>
+      <div><label>일자 열 없을 때 일괄 적용일</label><input class="imp" data-k="fixDate" type="date" value="${m.fixDate}"></div>
+      <div><label>PJT 열</label>${colSel("pjt",m.pjt,true)}</div>
+      <div><label>상세구분 열 <span class="sub">(없으면 기본값)</span></label>${colSel("cat",m.cat,true)}</div>
+      <div><label>메모 열</label>${colSel("memo",m.memo,true)}</div>
+      <div><label>금액 방식</label><select class="imp" data-k="amtMode"><option value="split"${split?" selected":""}>수금열/지출열 분리</option><option value="single"${!split?" selected":""}>구분열+금액열</option></select></div>
+      ${split?`<div><label>수금 금액 열</label>${colSel("inAmt",m.inAmt,true)}</div><div><label>지출 금액 열</label>${colSel("outAmt",m.outAmt,true)}</div>`
+             :`<div><label>구분 열(수금/지출)</label>${colSel("typeCol",m.typeCol,true)}</div><div><label>금액 열</label>${colSel("amtCol",m.amtCol,true)}</div>`}
+      <div><label>기본 수금 상세구분</label><select class="imp" data-k="catIn">${catOpts(CATS.수금)}</select></div>
+      <div><label>기본 지출 상세구분</label><select class="imp" data-k="catOut">${catOpts(CATS.지출)}</select></div>
+      <div><label>전망 / 실적</label><select class="imp" data-k="plan"><option${m.plan==="전망"?" selected":""}>전망</option><option${m.plan==="실적"?" selected":""}>실적</option></select></div>
+      <div><label>국내 / 해외</label><select class="imp" data-k="region"><option${m.region==="국내"?" selected":""}>국내</option><option${m.region==="해외"?" selected":""}>해외</option></select></div>
+    </div>
+    <div style="margin-top:12px"><strong style="font-size:13px">미리보기</strong> <span class="sub">(총 ${out.length}건 생성 예정, 앞 8건)</span>
+      <div style="overflow:auto;border:1px solid var(--line2);border-radius:8px;margin-top:4px">
+      <table class="ce-tbl"><thead><tr><th>일자</th><th>국내외</th><th>구분</th><th>상세구분</th><th>PJT</th><th>금액</th></tr></thead>
+      <tbody>${prev||`<tr><td colspan="6" class="empty">매핑을 지정하면 미리보기가 표시됩니다</td></tr>`}</tbody></table></div></div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <button class="btn" id="imp-go" ${out.length?"":"disabled"}>＋ ${out.length}건 가져오기(추가)</button>
+      <span class="note" style="align-self:center">기존 내역에 추가됩니다. 되돌리려면 가져온 건을 최근 입력/현황판에서 삭제하세요.</span></div>`;
+  // set select values
+  $("#imp-modal .imp[data-k=catIn]").value=m.catIn;$("#imp-modal .imp[data-k=catOut]").value=m.catOut;
+  $("#imp-close").onclick=()=>$("#imp-modal").hidden=true;
+  $$("#imp-modal .imp").forEach(el=>el.onchange=()=>{
+    const k=el.dataset.k,num=["hdr","date","pjt","cat","memo","inAmt","outAmt","typeCol","amtCol"].includes(k);
+    impMap[k]=num?parseInt(el.value):el.value;renderImport();});
+  $("#imp-go").onclick=()=>{
+    const {out,newPjts}=buildImport();if(!out.length)return;
+    newPjts.forEach(p=>{if(!settings.projects.includes(p))settings.projects.push(p);});
+    settings.projects.sort((a,b)=>a.localeCompare(b,"ko"));
+    entries=entries.concat(out);save();refreshPjtList();renderRecent();renderPjtManage();
+    $("#imp-modal").hidden=true;
+    alert(out.length+"건을 가져왔습니다.");
+  };
+}
+
+$("#s-clear").onclick=()=>{if(confirm("모든 데이터를 삭제할까요? 되돌릴 수 없습니다."))
+  {entries=[];save();refreshPjtList();renderRecent();alert("삭제했습니다.");}};
+$("#s-sample").onclick=()=>{
+  const t=isoToday(),ym=t.slice(0,7);const d=n=>`${ym}-${String(n).padStart(2,"0")}`;
+  const s=[
+    ["국내",d(2),"수금","공사수입(기성)","A현장","실적",1200,"2차 기성"],
+    ["국내",d(2),"지출","현장 대금지급","","실적",800,""],
+    ["국내",d(3),"수금","공사수입(분양금)","B현장","실적",3000,"방화6 중도금"],
+    ["국내",d(3),"수금","받을어음 만기","A현장","전망",500,""],
+    ["국내",d(3),"지출","본사 대금지급","","실적",450,""],
+    ["국내",d(5),"수금","사업비 차입","C현장","전망",5000,"PF 인출"],
+    ["국내",d(10),"지출","법인세","","전망",2200,"중간예납"],
+    ["국내",d(15),"수금","대여금 회입","","전망",800,""],
+    ["국내",d(20),"지출","지급어음 만기","","전망",1500,""],
+    ["해외",d(3),"수금","단독 입금","","실적",20,"베트남 기성 $20M"],
+    ["해외",d(3),"지출","업체 대금 지급","","실적",8,""],
+    ["해외",d(5),"수금","JV입금","","전망",15,"JV 정산"],
+    ["해외",d(3),"지출","국내 회입(시재 회수)","","전망",10,"본사 회수 $10M",1320],
+  ];
+  s.forEach(r=>entries.push({id:uid(),region:r[0],date:r[1],type:r[2],category:r[3],project:r[4],plan:r[5],amount:r[6],memo:r[7],...(r[8]?{fx:r[8]}:{})}));
+  if(!settings.baseBalance){settings.baseDate=d(1);settings.baseBalance=50000;}
+  if(!settings.ovBaseBalance)settings.ovBaseBalance=200;
+  if(!settings.naeBase)settings.naeBase=8000;
+  settings.ytdBaseDate=d(1);
+  settings.ytdBase.국내["공사 수입(기성, 분양금)"]=15058;
+  settings.ytdBase.국내["받을어음 만기"]=24311;
+  save();refreshPjtList();renderRecent();fillSettings();renderYtdPanel();renderPjtManage();
+  alert("샘플 13건(국내 9·해외 4)과 '26 실적 기초값 예시를 넣었습니다. 갑지 탭을 확인해 보세요.");
+};
+
+/* ---------- init ---------- */
+syncCat();fillSettings();refreshPjtList();renderRecent();renderYtdPanel();renderPjtManage();
+</script>
+</body>
+</html>
