@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WEB1 - 명함 스캐너</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
+           line-height: 1.6; margin: 0 auto; max-width: 760px; padding: 16px 20px 64px; }
+    h1 a { color: inherit; }
+    nav ol { padding-left: 20px; }
+    .drop { border: 2px dashed #999; border-radius: 12px; padding: 28px 16px; text-align: center; }
+    .drop.over { border-color: #2b7; background: rgba(34,187,119,.08); }
+    .drop p { margin: 8px 0; }
+    button { font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #888;
+             background: transparent; color: inherit; cursor: pointer; }
+    button.primary { border-color: #2b7; background: #2b7; color: #fff; }
+    button:disabled { opacity: .5; cursor: default; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; }
+    #preview { max-width: 100%; border-radius: 8px; display: none; margin-top: 12px; }
+    progress { width: 100%; height: 10px; }
+    label { display: block; margin-top: 10px; font-size: 14px; }
+    label input, label textarea { width: 100%; box-sizing: border-box; font: inherit;
+      padding: 7px 9px; margin-top: 3px; border: 1px solid #999; border-radius: 6px;
+      background: transparent; color: inherit; }
+    fieldset { border: 1px solid #bbb; border-radius: 10px; padding: 8px 16px 18px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+    @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+    .muted { color: #777; font-size: 13px; }
+    .status { min-height: 1.6em; font-size: 14px; }
+    #saved li { margin-bottom: 6px; }
+    details pre { white-space: pre-wrap; font-size: 13px; background: rgba(128,128,128,.12);
+                  padding: 10px; border-radius: 8px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1><a href="index.html">WEB</a></h1>
+  <nav>
+    <ol>
+      <li><a href="1.html">HTML</a></li>
+      <li><a href="2.html">CSS</a></li>
+      <li><a href="3.html">JavaScript</a></li>
+      <li><a href="card.html">명함 스캐너</a></li>
+    </ol>
+  </nav>
+
+  <h2>명함 스캐너 — 사진 한 장으로 주소록에 등록</h2>
+  <p class="muted">
+    명함을 찍어 올리면 브라우저 안에서 글자를 읽어 이름·회사·전화·이메일을 채웁니다.
+    확인 후 [주소록에 추가]를 누르면 vCard(.vcf) 파일이 만들어지고, 휴대폰에서 열면 연락처 앱이 바로 저장 화면을 띄웁니다.
+    사진은 서버로 전송되지 않고 이 브라우저 안에서만 처리됩니다.
+  </p>
+
+  <div class="drop" id="drop">
+    <p><strong>명함 사진을 여기에 끌어놓거나 붙여넣기(Ctrl+V)</strong></p>
+    <div class="row" style="justify-content:center">
+      <button type="button" id="pickCamera" class="primary">명함 촬영</button>
+      <button type="button" id="pickFile">파일 선택</button>
+    </div>
+    <input type="file" id="camera" accept="image/*" capture="environment" hidden>
+    <input type="file" id="file" accept="image/*" hidden>
+    <img id="preview" alt="업로드한 명함 미리보기">
+  </div>
+
+  <div class="row"><progress id="bar" value="0" max="1" hidden></progress></div>
+  <p class="status" id="status"></p>
+
+  <form id="form">
+    <fieldset>
+      <legend>인식 결과 (수정할 수 있습니다)</legend>
+      <div class="grid">
+        <label>이름 <input name="name" autocomplete="name"></label>
+        <label>직함 <input name="title"></label>
+        <label>회사 <input name="org"></label>
+        <label>부서 <input name="dept"></label>
+        <label>휴대전화 <input name="mobile" inputmode="tel"></label>
+        <label>회사 전화 <input name="tel" inputmode="tel"></label>
+        <label>팩스 <input name="fax" inputmode="tel"></label>
+        <label>이메일 <input name="email" inputmode="email"></label>
+        <label>웹사이트 <input name="url" inputmode="url"></label>
+        <label>주소 <input name="adr"></label>
+      </div>
+      <label>메모 <textarea name="note" rows="2"></textarea></label>
+      <label style="margin-top:14px"><input type="checkbox" id="withPhoto" style="width:auto" checked>
+        명함 사진을 연락처 사진으로 함께 저장</label>
+
+      <div class="row" style="margin-top:16px">
+        <button type="submit" class="primary">주소록에 추가 (.vcf 내려받기)</button>
+        <button type="button" id="save">이 명함 보관함에 저장</button>
+        <button type="button" id="reset">지우기</button>
+      </div>
+    </fieldset>
+  </form>
+
+  <details id="rawBox" hidden>
+    <summary>인식된 원본 텍스트 보기</summary>
+    <pre id="raw"></pre>
+  </details>
+
+  <h3>보관함 <span class="muted" id="count"></span></h3>
+  <p class="muted">이 브라우저에만 저장됩니다. 여러 장을 모아 한 번에 주소록으로 옮길 때 쓰세요.</p>
+  <ul id="saved"></ul>
+  <div class="row">
+    <button type="button" id="exportVcf">전체 vCard 내려받기</button>
+    <button type="button" id="exportCsv">구글 주소록용 CSV 내려받기</button>
+    <button type="button" id="clearAll">보관함 비우기</button>
+  </div>
+
+  <h3>휴대폰에서 주소록에 넣는 방법</h3>
+  <ol>
+    <li><strong>iPhone</strong>: 내려받은 .vcf 파일을 열면 &ldquo;새로운 연락처 만들기&rdquo;가 뜹니다.</li>
+    <li><strong>Android</strong>: 연락처 앱 → 설정 → 가져오기 → 내려받은 .vcf 선택.</li>
+    <li><strong>Google 주소록</strong>: contacts.google.com → 가져오기에서 .vcf 또는 CSV 업로드.</li>
+  </ol>
+  <p class="muted">
+    웹페이지가 사용자 확인 없이 주소록에 직접 쓰는 것은 어떤 브라우저에서도 허용되지 않습니다.
+    그래서 마지막 저장 한 번은 사람이 눌러야 하고, 그 앞 단계인 촬영·판독·입력을 모두 자동으로 처리합니다.
+  </p>
+
+<script>
+(function () {
+  "use strict";
+
+  var OCR_SOURCES = [
+    "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.1.1/tesseract.min.js",
+    "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"
+  ];
+
+  var $ = function (id) { return document.getElementById(id); };
+  var form = $("form");
+  var statusEl = $("status");
+  var bar = $("bar");
+  var preview = $("preview");
+  var photoDataUrl = "";
+
+  function setStatus(text) { statusEl.textContent = text; }
+  function field(name) { return form.elements[name]; }
+
+  /* ---------- 이미지 읽기 ---------- */
+
+  function handleFile(file) {
+    if (!file || !/^image\//.test(file.type)) {
+      setStatus("이미지 파일만 인식할 수 있습니다.");
+      return;
+    }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () { startOcr(img); };
+      img.onerror = function () { setStatus("이미지를 열지 못했습니다."); };
+      img.src = reader.result;
+      preview.src = reader.result;
+      preview.style.display = "block";
+    };
+    reader.onerror = function () { setStatus("파일을 읽지 못했습니다."); };
+    reader.readAsDataURL(file);
+  }
+
+  // 긴 변을 maxSide 로 맞춘 캔버스를 만든다.
+  function toCanvas(img, maxSide) {
+    var scale = Math.min(maxSide / Math.max(img.width, img.height), 3);
+    if (!isFinite(scale) || scale <= 0) { scale = 1; }
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+
+  // 회색조로 바꾸고 명암을 늘려 글자와 배경을 벌린다.
+  function enhance(canvas) {
+    var ctx = canvas.getContext("2d");
+    var data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    var px = data.data;
+    var i, gray;
+    var min = 255, max = 0;
+    for (i = 0; i < px.length; i += 4) {
+      gray = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) | 0;
+      px[i] = px[i + 1] = px[i + 2] = gray;
+      if (gray < min) { min = gray; }
+      if (gray > max) { max = gray; }
+    }
+    var span = max - min;
+    if (span > 8) {
+      for (i = 0; i < px.length; i += 4) {
+        gray = ((px[i] - min) * 255 / span) | 0;
+        px[i] = px[i + 1] = px[i + 2] = gray;
+      }
+    }
+    ctx.putImageData(data, 0, 0);
+    return canvas;
+  }
+
+  function loadScript(url) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement("script");
+      s.src = url;
+      s.onload = resolve;
+      s.onerror = function () { reject(new Error(url)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadOcrEngine() {
+    if (window.Tesseract) { return Promise.resolve(window.Tesseract); }
+    var chain = Promise.reject();
+    OCR_SOURCES.forEach(function (url) {
+      chain = chain.catch(function () { return loadScript(url); });
+    });
+    return chain.then(function () {
+      if (!window.Tesseract) { throw new Error("engine missing"); }
+      return window.Tesseract;
+    });
+  }
+
+  function startOcr(img) {
+    photoDataUrl = toCanvas(img, 480).toDataURL("image/jpeg", 0.72);
+    var canvas = enhance(toCanvas(img, 1600));
+
+    bar.hidden = false;
+    bar.value = 0;
+    setStatus("글자 인식 엔진을 불러오는 중입니다. 처음 한 번은 한국어 데이터를 내려받느라 시간이 걸립니다.");
+
+    loadOcrEngine().then(function (Tesseract) {
+      return Tesseract.recognize(canvas, "kor+eng", {
+        logger: function (m) {
+          if (m.status === "recognizing text") {
+            bar.value = m.progress;
+            setStatus("글자를 읽는 중 " + Math.round(m.progress * 100) + "%");
+          } else if (m.status) {
+            setStatus(m.status);
+          }
+        }
+      });
+    }).then(function (result) {
+      bar.hidden = true;
+      var text = result.data.text || "";
+      $("raw").textContent = text.trim() || "(인식된 글자가 없습니다)";
+      $("rawBox").hidden = false;
+      var found = fill(parseCard(text));
+      setStatus(found
+        ? "인식했습니다. 틀린 곳을 고친 뒤 [주소록에 추가]를 누르세요."
+        : "글자를 거의 읽지 못했습니다. 더 밝은 곳에서 명함을 화면에 꽉 채워 다시 찍어보세요.");
+    }).catch(function (err) {
+      bar.hidden = true;
+      setStatus("인식 엔진을 불러오지 못했습니다(" + (err && err.message ? err.message : "네트워크") +
+                "). 아래 칸에 직접 입력해도 vCard는 그대로 만들어집니다.");
+    });
+  }
+
+  /* ---------- 명함 텍스트 해석 ---------- */
+
+  var RE = {
+    email: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+    url: /(?:https?:\/\/|www\.)[A-Za-z0-9._~:\/?#@!$&'()*+,;=%-]+/i,
+    phone: /\+?\d[\d\s().-]{7,}\d/g,
+    hangul: /[가-힣]/,
+    fax: /(fax|팩스|^\s*f\b|\bf\s*[.:])/i,
+    mobile: /(mobile|cell|휴대|핸드폰|^\s*[mh]\b|\bm\s*[.:]|\bh\.?p\b)/i,
+    work: /(tel|phone|전화|사무실|대표번호|^\s*[tp]\b|\bt\s*[.:])/i,
+    org: /(주식회사|㈜|\(주\)|유한회사|법인|연구소|재단|협회|센터|대학교|대학|병원|은행|Inc\.?|Corp|Company|Co\.,?\s*Ltd|Ltd\.?|LLC|GmbH|Group|Labs?|Technologies|Systems|Partners)/i,
+    title: /(대표이사|대표|회장|사장|부사장|전무|상무|이사|고문|본부장|실장|센터장|팀장|부장|차장|과장|대리|주임|사원|매니저|연구원|교수|박사|변호사|회계사|디자이너|개발자|엔지니어|컨설턴트|기획자|애널리스트|프로듀서|에디터|CEO|CTO|CFO|COO|Vice\s+President|President|Director|Manager|Engineer|Designer|Developer|Analyst|Consultant|Founder|Head\s+of)/i,
+    dept: /(본부|사업부|연구소|[가-힣]+팀|[가-힣]+실|[가-힣]{2,}부(?![가-힣])|Division|Department|Team)/,
+    adr: /(\d{5}\b|[가-힣]+(?:특별시|광역시|자치시|자치도)|[가-힣]{2,}(?:시|군|구)\s|[가-힣0-9]+(?:로|길|대로)\s*\d|번지|Seoul|Korea|Street|Avenue|Suite|Floor)/i,
+    punct: /^[^가-힣A-Za-z0-9]+$/,
+    label: /^(tel|phone|fax|mobile|cell|e-?mail|http|www|전화|팩스|휴대|주소|address)\b/i,
+    korName: /^[가-힣]{2,5}$/,
+    engName: /^[A-Z][A-Za-z'.-]+(?:\s[A-Z][A-Za-z'.-]*){1,2}$/
+  };
+
+  // 두 글자 성은 규칙으로 알 수 없어 흔한 것만 목록으로 둔다.
+  var COMPOUND_SURNAMES = ["남궁", "황보", "제갈", "사공", "선우", "서문", "독고", "동방", "망절"];
+
+  // 0 으로 시작하는 국내 번호를 지역번호 기준으로 끊는다.
+  function formatDomestic(s) {
+    if (/^02\d{7,8}$/.test(s)) { return s.replace(/^(02)(\d{3,4})(\d{4})$/, "$1-$2-$3"); }
+    if (/^0\d{9,10}$/.test(s)) { return s.replace(/^(\d{3})(\d{3,4})(\d{4})$/, "$1-$2-$3"); }
+    return "";
+  }
+
+  function normalizePhone(raw) {
+    var s = raw.replace(/[^\d+]/g, "");
+    if (s.indexOf("+") > 0) { s = s.replace(/\+/g, ""); }
+    if (/^\+82/.test(s)) {
+      var local = s.slice(3);
+      if (local.charAt(0) !== "0") { local = "0" + local; }
+      var formatted = formatDomestic(local);
+      return formatted ? "+82-" + formatted.slice(1) : "+82-" + local.slice(1);
+    }
+    var domestic = formatDomestic(s);
+    if (domestic) { return domestic; }
+    return raw.replace(/\s+/g, " ").trim();
+  }
+
+  function looksLikePhone(digits) {
+    return digits.length >= 9 && digits.length <= 13;
+  }
+
+  // "개발본부 플랫폼팀 팀장" -> {title:"팀장", dept:"개발본부 플랫폼팀"}
+  // "김서연 대리"           -> {title:"대리", name:"김서연"}
+  function splitTitleLine(line) {
+    var m = line.match(RE.title);
+    if (!m) { return null; }
+    var out = { title: "", dept: "", name: "" };
+
+    if (!RE.hangul.test(line)) {
+      // 영문 직함은 "Head of Product" 처럼 여러 낱말이라 줄 전체를 직함으로 본다.
+      if (RE.org.test(line)) { return null; }
+      out.title = line.length <= 40 ? line : m[0];
+      return out;
+    }
+
+    // "책임연구원" 처럼 앞에 수식어가 붙는 경우가 있어 낱말 전체로 넓힌다.
+    var start = m.index;
+    while (start > 0 && !/[\s,/|]/.test(line.charAt(start - 1))) { start--; }
+    var word = line.slice(start).split(/[\s,/|]/)[0];
+    // "매니저먼트" 처럼 낱말 안에 우연히 들어간 경우는 직함이 아니다.
+    if (word.slice(-m[0].length) !== m[0]) { return null; }
+
+    out.title = line.slice(start).trim();
+    var prefix = line.slice(0, start).replace(/[,/|]/g, " ").replace(/\s+/g, " ").trim();
+    if (!prefix) { return out; }
+    if (RE.korName.test(prefix) && !RE.dept.test(prefix) && !RE.org.test(prefix)) {
+      out.name = prefix;
+      return out;
+    }
+
+    // "이수민 마케팅팀 과장" 처럼 이름과 부서가 함께 오는 줄을 나눈다.
+    var head = prefix.split(" ")[0];
+    var rest = prefix.slice(head.length).trim();
+    if (RE.korName.test(head) && !RE.dept.test(head) && !RE.org.test(head) && RE.dept.test(rest)) {
+      out.name = head;
+      out.dept = rest;
+    } else {
+      out.dept = prefix;
+    }
+    return out;
+  }
+
+  function parseCard(text) {
+    var out = { name: "", title: "", org: "", dept: "", mobile: "", tel: "",
+                fax: "", email: "", url: "", adr: "" };
+    var lines = text.split(/\r?\n/).map(function (l) {
+      return l.replace(/\s+/g, " ").trim();
+    }).filter(function (l) { return l.length > 0; });
+
+    var consumed = {};
+    var titleLine = -1;
+    var hintName = "";
+
+    lines.forEach(function (line, idx) {
+      var m;
+
+      if (!out.email && (m = line.match(RE.email))) {
+        out.email = m[0];
+        consumed[idx] = true;
+      }
+
+      if (!out.url && (m = line.match(RE.url))) {
+        var u = m[0].replace(/[.,;]+$/, "");
+        if (u.indexOf("@") === -1) { out.url = u; consumed[idx] = true; }
+      }
+
+      // 한 줄에 "Tel. ... Fax. ..." 처럼 여러 번호가 오므로 번호 바로 앞의 글자로 종류를 가른다.
+      var re = new RegExp(RE.phone.source, "g");
+      var prev = 0;
+      while ((m = re.exec(line)) !== null) {
+        var head = line.slice(prev, m.index);
+        prev = m.index + m[0].length;
+        var digits = m[0].replace(/\D/g, "");
+        if (!looksLikePhone(digits)) { continue; }
+        consumed[idx] = true;
+        var num = normalizePhone(m[0]);
+        var kind = "";
+        if (RE.fax.test(head)) { kind = "fax"; }
+        else if (RE.mobile.test(head) || /^(01\d|8210)/.test(digits)) { kind = "mobile"; }
+        else if (RE.work.test(head)) { kind = "tel"; }
+        else { kind = out.tel ? (out.mobile ? "fax" : "mobile") : "tel"; }
+        if (!out[kind]) { out[kind] = num; }
+      }
+
+      if (consumed[idx]) { return; }
+
+      // 직함 낱말이 있는 줄은 회사명보다 직함으로 보는 편이 맞다. 예: "디자인센터 수석디자이너"
+      if (titleLine < 0 && RE.title.test(line) && line.length < 40) {
+        var parts = splitTitleLine(line);
+        if (parts) {
+          out.title = parts.title;
+          if (parts.dept) { out.dept = parts.dept; }
+          if (parts.name) { hintName = parts.name; }
+          titleLine = idx;
+          consumed[idx] = true;
+          return;
+        }
+      }
+      if (!out.org && RE.org.test(line) && line.length < 60) {
+        out.org = line;
+        consumed[idx] = true;
+        return;
+      }
+      if (!out.adr && RE.adr.test(line) && line.length > 8) {
+        out.adr = line.replace(/^(주소|address)\s*[:.]?\s*/i, "");
+        consumed[idx] = true;
+      }
+    });
+
+    if (!out.dept) {
+      lines.some(function (line, idx) {
+        if (consumed[idx] || /\d/.test(line) || line.length > 30) { return false; }
+        if (!RE.dept.test(line)) { return false; }
+        out.dept = line;
+        consumed[idx] = true;
+        return true;
+      });
+    }
+
+    // 이름: 위쪽에 있고, 숫자나 회사·직함 낱말이 없는 짧은 줄일수록 점수가 높다.
+    var best = null;
+    lines.forEach(function (line, idx) {
+      if (consumed[idx] || RE.label.test(line) || RE.punct.test(line)) { return; }
+      if (/\d/.test(line) || RE.email.test(line) || RE.url.test(line)) { return; }
+      var bare = line.replace(/[^가-힣A-Za-z'.\- ]/g, "").replace(/\s+/g, " ").trim();
+      if (!bare) { return; }
+      var score = 20 - idx;
+      if (RE.korName.test(bare)) { score += 12; }
+      else if (RE.engName.test(bare)) { score += 6; }
+      else { return; }
+      if (bare === bare.toUpperCase() && bare.indexOf(" ") !== -1) { score -= 3; }
+      if (RE.title.test(line)) { score -= 12; }
+      if (RE.org.test(line) || RE.dept.test(line)) { score -= 12; }
+      if (best === null || score > best.score) { best = { text: bare, score: score }; }
+    });
+
+    out.name = hintName || (best ? best.text : "");
+    return out;
+  }
+
+  function fill(data) {
+    var filled = 0;
+    Object.keys(data).forEach(function (key) {
+      var el = field(key);
+      if (el && data[key]) { el.value = data[key]; filled++; }
+    });
+    return filled > 0;
+  }
+
+  /* ---------- vCard ---------- */
+
+  function esc(value) {
+    return String(value || "").replace(/\\/g, "\\\\").replace(/([;,])/g, "\\$1")
+      .replace(/\r?\n/g, "\\n");
+  }
+
+  function fold(line) {
+    if (line.length <= 75) { return line; }
+    var out = line.slice(0, 75);
+    var i = 75;
+    while (i < line.length) { out += "\r\n " + line.slice(i, i + 74); i += 74; }
+    return out;
+  }
+
+  function splitName(name) {
+    var value = String(name || "").trim();
+    if (!value) { return { family: "", given: "" }; }
+    if (RE.hangul.test(value) && value.indexOf(" ") === -1 && value.length <= 5) {
+      var cut = COMPOUND_SURNAMES.indexOf(value.slice(0, 2)) !== -1 && value.length >= 3 ? 2 : 1;
+      return { family: value.slice(0, cut), given: value.slice(cut) };
+    }
+    var parts = value.split(/\s+/);
+    return { family: parts[parts.length - 1], given: parts.slice(0, -1).join(" ") };
+  }
+
+  function toVcard(c, includePhoto) {
+    var n = splitName(c.name);
+    var lines = ["BEGIN:VCARD", "VERSION:3.0"];
+    lines.push("N:" + esc(n.family) + ";" + esc(n.given) + ";;;");
+    lines.push("FN:" + esc(c.name || c.org || "이름 없음"));
+    if (c.org) { lines.push("ORG:" + esc(c.org) + (c.dept ? ";" + esc(c.dept) : "")); }
+    else if (c.dept) { lines.push("ORG:" + esc(c.dept)); }
+    if (c.title) { lines.push("TITLE:" + esc(c.title)); }
+    if (c.mobile) { lines.push("TEL;TYPE=CELL:" + esc(c.mobile)); }
+    if (c.tel) { lines.push("TEL;TYPE=WORK,VOICE:" + esc(c.tel)); }
+    if (c.fax) { lines.push("TEL;TYPE=WORK,FAX:" + esc(c.fax)); }
+    if (c.email) { lines.push("EMAIL;TYPE=INTERNET,WORK:" + esc(c.email)); }
+    if (c.url) { lines.push("URL:" + esc(c.url)); }
+    if (c.adr) { lines.push("ADR;TYPE=WORK:;;" + esc(c.adr) + ";;;;"); }
+    if (c.note) { lines.push("NOTE:" + esc(c.note)); }
+    if (includePhoto && c.photo) {
+      lines.push(fold("PHOTO;ENCODING=b;TYPE=JPEG:" + c.photo.split(",")[1]));
+    }
+    lines.push("REV:" + new Date().toISOString().replace(/\.\d+Z$/, "Z"));
+    lines.push("END:VCARD");
+    return lines.join("\r\n") + "\r\n";
+  }
+
+  function download(filename, text, mime) {
+    // 엑셀이 CSV 를 UTF-8 로 읽게 하려면 BOM 이 필요하지만, vCard 파서는 BOM 을 싫어한다.
+    var body = mime === "text/csv" ? "﻿" + text : text;
+    var blob = new Blob([body], { type: mime + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+  }
+
+  function readForm() {
+    var c = {};
+    ["name", "title", "org", "dept", "mobile", "tel", "fax", "email", "url", "adr", "note"]
+      .forEach(function (key) { c[key] = field(key).value.trim(); });
+    c.photo = photoDataUrl;
+    return c;
+  }
+
+  function safeName(c) {
+    return (c.name || c.org || "contact").replace(/[^\w가-힣.-]+/g, "_").slice(0, 40);
+  }
+
+  /* ---------- 보관함 ---------- */
+
+  var KEY = "web1.businessCards";
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY) || "[]"); }
+    catch (e) { return []; }
+  }
+
+  function store(list) {
+    try { localStorage.setItem(KEY, JSON.stringify(list)); }
+    catch (e) { setStatus("브라우저 저장 공간이 가득 찼습니다. 사진 저장을 끄고 다시 시도하세요."); }
+  }
+
+  function render() {
+    var list = load();
+    var ul = $("saved");
+    ul.textContent = "";
+    $("count").textContent = list.length ? "(" + list.length + "장)" : "(비어 있음)";
+    list.forEach(function (c, i) {
+      var li = document.createElement("li");
+      li.textContent = [c.name, c.org, c.mobile || c.tel, c.email]
+        .filter(Boolean).join(" · ") || "(빈 명함)";
+      var del = document.createElement("button");
+      del.type = "button";
+      del.textContent = "삭제";
+      del.style.marginLeft = "8px";
+      del.onclick = function () {
+        var next = load();
+        next.splice(i, 1);
+        store(next);
+        render();
+      };
+      li.appendChild(del);
+      ul.appendChild(li);
+    });
+  }
+
+  /* ---------- 이벤트 ---------- */
+
+  $("pickCamera").onclick = function () { $("camera").click(); };
+  $("pickFile").onclick = function () { $("file").click(); };
+  ["camera", "file"].forEach(function (id) {
+    $(id).onchange = function (e) { handleFile(e.target.files[0]); e.target.value = ""; };
+  });
+
+  var drop = $("drop");
+  ["dragenter", "dragover"].forEach(function (type) {
+    drop.addEventListener(type, function (e) {
+      e.preventDefault();
+      drop.classList.add("over");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (type) {
+    drop.addEventListener(type, function (e) {
+      e.preventDefault();
+      drop.classList.remove("over");
+    });
+  });
+  drop.addEventListener("drop", function (e) {
+    if (e.dataTransfer.files.length) { handleFile(e.dataTransfer.files[0]); }
+  });
+  document.addEventListener("paste", function (e) {
+    var items = (e.clipboardData || {}).items || [];
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image/") === 0) {
+        handleFile(items[i].getAsFile());
+        break;
+      }
+    }
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var c = readForm();
+    if (!c.name && !c.org && !c.mobile && !c.tel && !c.email) {
+      setStatus("저장할 내용이 없습니다. 이름이나 연락처를 먼저 채워주세요.");
+      return;
+    }
+    download(safeName(c) + ".vcf", toVcard(c, $("withPhoto").checked), "text/vcard");
+    setStatus("vCard를 내려받았습니다. 파일을 열면 연락처 앱이 저장 화면을 띄웁니다.");
+  });
+
+  $("save").onclick = function () {
+    var c = readForm();
+    if (!$("withPhoto").checked) { c.photo = ""; }
+    var list = load();
+    list.push(c);
+    store(list);
+    render();
+    setStatus("보관함에 저장했습니다.");
+  };
+
+  $("reset").onclick = function () {
+    form.reset();
+    photoDataUrl = "";
+    preview.style.display = "none";
+    $("rawBox").hidden = true;
+    setStatus("");
+  };
+
+  $("exportVcf").onclick = function () {
+    var list = load();
+    if (!list.length) { setStatus("보관함이 비어 있습니다."); return; }
+    var all = list.map(function (c) { return toVcard(c, true); }).join("");
+    download("contacts.vcf", all, "text/vcard");
+  };
+
+  $("exportCsv").onclick = function () {
+    var list = load();
+    if (!list.length) { setStatus("보관함이 비어 있습니다."); return; }
+    var head = ["Name", "Given Name", "Family Name", "Organization Name",
+                "Organization Title", "Organization Department", "E-mail 1 - Value",
+                "Phone 1 - Value", "Phone 2 - Value", "Address 1 - Formatted",
+                "Website 1 - Value", "Notes"];
+    var cell = function (v) { return '"' + String(v || "").replace(/"/g, '""') + '"'; };
+    var rows = list.map(function (c) {
+      var n = splitName(c.name);
+      return [c.name, n.given, n.family, c.org, c.title, c.dept, c.email,
+              c.mobile, c.tel, c.adr, c.url, c.note].map(cell).join(",");
+    });
+    download("contacts.csv", head.join(",") + "\n" + rows.join("\n"), "text/csv");
+  };
+
+  $("clearAll").onclick = function () {
+    if (!load().length) { return; }
+    if (window.confirm("보관함의 명함을 모두 지울까요?")) {
+      store([]);
+      render();
+    }
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
